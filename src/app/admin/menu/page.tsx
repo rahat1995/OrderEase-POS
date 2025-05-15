@@ -20,11 +20,12 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogTrigger,
   DialogClose,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription as PageCardDescription, CardHeader as PageCardHeader, CardTitle as PageCardTitle } from '@/components/ui/card'; // Renamed to avoid conflict
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/hooks/use-toast';
 import { PlusCircle, Edit3, Trash2, Loader2, ListPlus, AlertTriangle, ImageOff } from 'lucide-react';
@@ -128,22 +129,32 @@ export default function MenuManagementPage() {
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8">
       <Card className="shadow-xl">
-        <CardHeader className="flex flex-row items-center justify-between">
+        <PageCardHeader className="flex flex-row items-center justify-between">
           <div className="flex items-center space-x-3">
             <ListPlus className="h-8 w-8 text-accent" />
             <div>
-              <CardTitle className="text-2xl md:text-3xl">Menu Management</CardTitle>
-              <CardDescription>Add, edit, or delete menu items.</CardDescription>
+              <PageCardTitle className="text-2xl md:text-3xl">Menu Management</PageCardTitle>
+              <PageCardDescription>Add, edit, or delete menu items.</PageCardDescription>
             </div>
           </div>
-          <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+          <Dialog open={isFormOpen} onOpenChange={(isOpen) => {
+              setIsFormOpen(isOpen);
+              if (!isOpen) setEditingItem(null); // Reset editing item when dialog closes
+            }}>
             <DialogTrigger asChild>
               <Button onClick={openNewForm} className="bg-accent hover:bg-accent/90">
                 <PlusCircle className="mr-2 h-4 w-4" /> Add New Item
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle>{editingItem ? 'Edit Menu Item' : 'Add New Menu Item'}</DialogTitle>
+                <DialogDescription>
+                  {editingItem ? 'Update the details for this menu item.' : 'Fill in the form to add a new item to the menu.'}
+                </DialogDescription>
+              </DialogHeader>
               <MenuItemForm
+                key={editingItem ? editingItem.id : 'new'} // Add key to re-initialize form on edit/new
                 initialData={editingItem}
                 onSubmit={handleFormSubmit}
                 isSubmitting={isSubmitting}
@@ -151,7 +162,7 @@ export default function MenuManagementPage() {
               />
             </DialogContent>
           </Dialog>
-        </CardHeader>
+        </PageCardHeader>
         <CardContent>
           {isLoading && <div className="text-center py-4"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" /></div>}
           {!isLoading && menuItems.length === 0 ? (
@@ -203,10 +214,12 @@ export default function MenuManagementPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center"><AlertTriangle className="mr-2 h-5 w-5 text-destructive"/>Confirm Deletion</DialogTitle>
+            <DialogDescription>
+              This action cannot be undone and will permanently delete the menu item.
+            </DialogDescription>
           </DialogHeader>
-          <p>
+          <p className="py-2">
             Are you sure you want to delete the menu item: <strong>{itemToDelete?.name}</strong>?
-            This action cannot be undone.
           </p>
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} disabled={isSubmitting}>
@@ -222,3 +235,4 @@ export default function MenuManagementPage() {
     </div>
   );
 }
+

@@ -20,13 +20,13 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardFooter } from '@/components/ui/card'; // Removed CardHeader, CardTitle
 import { Loader2 } from 'lucide-react';
 
 const menuItemSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
   price: z.coerce.number().min(0, { message: "Price must be a positive number." }),
-  imageUrl: z.string().url({ message: "Please enter a valid URL." }),
+  imageUrl: z.string().url({ message: "Please enter a valid URL." }).or(z.literal('')), // Allow empty string for optional image
   dataAiHint: z.string().optional(),
 });
 
@@ -50,11 +50,24 @@ export default function MenuItemForm({ initialData, onSubmit, isSubmitting, onCa
     },
   });
 
+  // Reset form when initialData changes (e.g., switching from "Add New" to "Edit" or vice-versa)
+  React.useEffect(() => {
+    form.reset({
+      name: initialData?.name || '',
+      price: initialData?.price || 0,
+      imageUrl: initialData?.imageUrl || '',
+      dataAiHint: initialData?.dataAiHint || '',
+    });
+  }, [initialData, form]);
+
+
   const handleFormSubmit: SubmitHandler<MenuItemFormData> = async (data) => {
-    const submitData: CreateMenuItemInput = { ...data };
+    const submitData: CreateMenuItemInput = { 
+      ...data,
+      // Ensure imageUrl is a valid URL or a placeholder if empty
+      imageUrl: data.imageUrl || `https://placehold.co/300x200.png?text=${encodeURIComponent(data.name || 'Item')}`,
+    };
     if (initialData?.id) {
-      // For updates, the ID is handled by the parent component/action
-      // This form only submits the updatable fields
       await onSubmit(submitData);
     } else {
       await onSubmit(submitData);
@@ -62,13 +75,13 @@ export default function MenuItemForm({ initialData, onSubmit, isSubmitting, onCa
   };
 
   return (
-    <Card className="w-full max-w-lg mx-auto shadow-xl">
-      <CardHeader>
-        <CardTitle>{initialData ? 'Edit Menu Item' : 'Add New Menu Item'}</CardTitle>
-      </CardHeader>
+    // The DialogContent provides the card-like shell and title.
+    // This Card is now mainly for structuring FormContent and FormFooter.
+    <Card className="w-full shadow-none border-none">
       <Form {...form}>
         <form onSubmit={form.handleSubmit(handleFormSubmit)}>
-          <CardContent className="space-y-6">
+          {/* CardContent by default has p-6 pt-0. DialogContent's grid provides gap. */}
+          <CardContent className="space-y-4"> {/* Reduced space-y from 6 to 4 for compactness */}
             <FormField
               control={form.control}
               name="name"
@@ -100,11 +113,11 @@ export default function MenuItemForm({ initialData, onSubmit, isSubmitting, onCa
               name="imageUrl"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Image URL</FormLabel>
+                  <FormLabel>Image URL (Optional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="https://example.com/image.png" {...field} disabled={isSubmitting} />
+                    <Input placeholder="https://placehold.co/300x200.png" {...field} disabled={isSubmitting} />
                   </FormControl>
-                  <FormDescription>URL of the menu item image.</FormDescription>
+                  <FormDescription>Leave blank to use a default placeholder.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -116,7 +129,7 @@ export default function MenuItemForm({ initialData, onSubmit, isSubmitting, onCa
                 <FormItem>
                   <FormLabel>AI Hint (Optional)</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="e.g., pizza cheese" {...field} disabled={isSubmitting} />
+                    <Textarea placeholder="e.g., pizza cheese" {...field} rows={2} disabled={isSubmitting} />
                   </FormControl>
                   <FormDescription>Keywords for AI image search (max 2 words).</FormDescription>
                   <FormMessage />
@@ -124,7 +137,7 @@ export default function MenuItemForm({ initialData, onSubmit, isSubmitting, onCa
               )}
             />
           </CardContent>
-          <CardFooter className="flex justify-end space-x-2 pt-6">
+          <CardFooter className="flex justify-end space-x-2 pt-4"> {/* Reduced pt from 6 to 4 */}
             {onCancel && (
               <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
                 Cancel
@@ -140,3 +153,4 @@ export default function MenuItemForm({ initialData, onSubmit, isSubmitting, onCa
     </Card>
   );
 }
+
