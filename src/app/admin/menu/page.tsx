@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { MenuItem, CreateMenuItemInput } from '@/types';
 import { addMenuItemAction, fetchMenuItemsAction, updateMenuItemAction, deleteMenuItemAction } from '@/app/actions/menuActions';
+import { deleteImageAction } from '@/app/actions/storageActions';
 import MenuItemForm from '@/components/admin/MenuItemForm';
 
 import { Button } from '@/components/ui/button';
@@ -22,10 +23,10 @@ import {
   DialogTitle,
   DialogDescription,
   DialogTrigger,
-  DialogClose,
+  // DialogClose, // Not explicitly used if form handles close
   DialogFooter,
 } from '@/components/ui/dialog';
-import { Card, CardContent, CardDescription as PageCardDescription, CardHeader as PageCardHeader, CardTitle as PageCardTitle } from '@/components/ui/card'; // Renamed to avoid conflict
+import { Card, CardContent, CardDescription as PageCardDescription, CardHeader as PageCardHeader, CardTitle as PageCardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/hooks/use-toast';
 import { PlusCircle, Edit3, Trash2, Loader2, ListPlus, AlertTriangle, ImageOff } from 'lucide-react';
@@ -33,7 +34,7 @@ import { PlusCircle, Edit3, Trash2, Loader2, ListPlus, AlertTriangle, ImageOff }
 export default function MenuManagementPage() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDialogSubmitting, setIsDialogSubmitting] = useState(false); // For dialog's submit button state
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [itemToDelete, setItemToDelete] = useState<MenuItem | null>(null);
@@ -56,17 +57,18 @@ export default function MenuManagementPage() {
   }, [loadMenuItems]);
 
   const handleFormSubmit = async (data: CreateMenuItemInput) => {
-    setIsSubmitting(true);
+    setIsDialogSubmitting(true);
     try {
+      let result;
       if (editingItem && editingItem.id) {
-        const result = await updateMenuItemAction(editingItem.id, data);
+        result = await updateMenuItemAction(editingItem.id, data);
         if (result.success) {
           toast({ title: "Success", description: "Menu item updated." });
         } else {
           throw new Error(result.error || "Failed to update menu item.");
         }
       } else {
-        const result = await addMenuItemAction(data);
+        result = await addMenuItemAction(data);
         if (result.success && result.menuItem) {
           toast({ title: "Success", description: "New menu item added." });
         } else {
@@ -78,15 +80,30 @@ export default function MenuManagementPage() {
       setEditingItem(null);
     } catch (error) {
       toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
+      // Don't close form on error so user can retry
     } finally {
-      setIsSubmitting(false);
+      setIsDialogSubmitting(false);
     }
   };
 
   const handleDeleteConfirm = async () => {
     if (!itemToDelete || !itemToDelete.id) return;
-    setIsSubmitting(true);
+    setIsDialogSubmitting(true); // Use same state for delete dialog's loader
     try {
+      // First, attempt to delete the image from Firebase Storage if an imageUrl exists
+      if (itemToDelete.imageUrl && itemToDelete.imageUrl.includes('firebasestorage.googleapis.com')) {
+        const imageDeleteResult = await deleteImageAction(itemToDelete.imageUrl);
+        if (!imageDeleteResult.success) {
+          // Log error but proceed with deleting the Firestore document
+          toast({
+            title: "Image Deletion Warning",
+            description: `Could not delete image from storage: ${imageDeleteResult.error}. The menu item will still be deleted.`,
+            variant: "destructive",
+            duration: 7000,
+          });
+        }
+      }
+
       const result = await deleteMenuItemAction(itemToDelete.id);
       if (result.success) {
         toast({ title: "Success", description: `Menu item "${itemToDelete.name}" deleted.` });
@@ -97,7 +114,7 @@ export default function MenuManagementPage() {
     } catch (error) {
       toast({ title: "Error deleting item", description: (error as Error).message, variant: "destructive" });
     } finally {
-      setIsSubmitting(false);
+      setIsDialogSubmitting(false);
       setIsDeleteDialogOpen(false);
       setItemToDelete(null);
     }
@@ -128,47 +145,51 @@ export default function MenuManagementPage() {
   
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8">
-      <Card className="shadow-xl">
-        <PageCardHeader className="flex flex-row items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <ListPlus className="h-8 w-8 text-accent" />
-            <div>
-              <PageCardTitle className="text-2xl md:text-3xl">Menu Management</PageCardTitle>
-              <PageCardDescription>Add, edit, or delete menu items.</PageCardDescription>
-            </div>
+      <PageCardHeader className="flex flex-row items-center justify-between mb-6 -mx-2 md:-mx-0"> {/* Added mb and adjusted negative margins */}
+        <div className="flex items-center space-x-3">
+          <ListPlus className="h-8 w-8 text-accent" />
+          <div>
+            <PageCardTitle className="text-2xl md:text-3xl">Menu Management</PageCardTitle>
+            <PageCardDescription>Add, edit, or delete menu items. Images are uploaded to Firebase Storage.</PageCardDescription>
           </div>
-          <Dialog open={isFormOpen} onOpenChange={(isOpen) => {
-              setIsFormOpen(isOpen);
-              if (!isOpen) setEditingItem(null); // Reset editing item when dialog closes
-            }}>
-            <DialogTrigger asChild>
-              <Button onClick={openNewForm} className="bg-accent hover:bg-accent/90">
-                <PlusCircle className="mr-2 h-4 w-4" /> Add New Item
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-lg">
-              <DialogHeader>
-                <DialogTitle>{editingItem ? 'Edit Menu Item' : 'Add New Menu Item'}</DialogTitle>
-                <DialogDescription>
-                  {editingItem ? 'Update the details for this menu item.' : 'Fill in the form to add a new item to the menu.'}
-                </DialogDescription>
-              </DialogHeader>
-              <MenuItemForm
-                key={editingItem ? editingItem.id : 'new'} // Add key to re-initialize form on edit/new
-                initialData={editingItem}
-                onSubmit={handleFormSubmit}
-                isSubmitting={isSubmitting}
-                onCancel={() => { setIsFormOpen(false); setEditingItem(null);}}
-              />
-            </DialogContent>
-          </Dialog>
-        </PageCardHeader>
-        <CardContent>
-          {isLoading && <div className="text-center py-4"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" /></div>}
+        </div>
+        <Dialog open={isFormOpen} onOpenChange={(isOpen) => {
+            setIsFormOpen(isOpen);
+            if (!isOpen) setEditingItem(null); 
+          }}>
+          <DialogTrigger asChild>
+            <Button onClick={openNewForm} className="bg-accent hover:bg-accent/90">
+              <PlusCircle className="mr-2 h-4 w-4" /> Add New Item
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-lg"> {/* Consider sm:max-w-xl or md for more space if form is complex */}
+            <DialogHeader>
+              <DialogTitle>{editingItem ? 'Edit Menu Item' : 'Add New Menu Item'}</DialogTitle>
+              <DialogDescription>
+                {editingItem ? 'Update the details for this menu item.' : 'Fill in the form to add a new item to the menu.'}
+              </DialogDescription>
+            </DialogHeader>
+            <MenuItemForm
+              key={editingItem ? editingItem.id : 'new'}
+              initialData={editingItem}
+              onSubmit={handleFormSubmit}
+              isSubmitting={isDialogSubmitting} // Pass the dialog's submitting state
+              onCancel={() => { setIsFormOpen(false); setEditingItem(null);}}
+            />
+          </DialogContent>
+        </Dialog>
+      </PageCardHeader>
+      <Card className="shadow-xl">
+        <CardContent className={menuItems.length === 0 ? "pt-6" : ""}> {/* Add padding-top if table not rendered */}
+          {isLoading && menuItems.length > 0 && <div className="text-center py-4"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" /> Refreshing...</div>}
           {!isLoading && menuItems.length === 0 ? (
-            <p className="text-center text-muted-foreground py-10">No menu items found. Add one to get started!</p>
+             <div className="text-center py-10 text-muted-foreground">
+                <ImageOff className="mx-auto h-16 w-16 mb-4" />
+                <p className="text-lg font-medium">No menu items found.</p>
+                <p className="text-sm">Click "Add New Item" to get started!</p>
+            </div>
           ) : (
-            <ScrollArea className="h-[calc(100vh-300px)]"> {/* Adjust height as needed */}
+            <ScrollArea className="h-[calc(100vh-350px)]"> {/* Adjusted height */}
               <Table>
                 <TableHeader className="sticky top-0 bg-muted z-10">
                   <TableRow>
@@ -183,20 +204,20 @@ export default function MenuManagementPage() {
                     <TableRow key={item.id}>
                       <TableCell>
                         <img 
-                          src={item.imageUrl || 'https://placehold.co/60x60.png'} 
+                          src={item.imageUrl || 'https://placehold.co/60x60.png?text=No+Image'} 
                           alt={item.name} 
-                          className="w-12 h-12 object-cover rounded-md"
+                          className="w-12 h-12 object-cover rounded-md bg-muted"
                           data-ai-hint={item.dataAiHint || "food item"}
                           onError={(e) => (e.currentTarget.src = 'https://placehold.co/60x60.png?text=Error')}
                         />
                       </TableCell>
                       <TableCell className="font-medium">{item.name}</TableCell>
                       <TableCell className="text-right">${item.price.toFixed(2)}</TableCell>
-                      <TableCell className="text-center space-x-2">
-                        <Button variant="ghost" size="icon" onClick={() => openEditForm(item)} aria-label="Edit item">
+                      <TableCell className="text-center space-x-1">
+                        <Button variant="ghost" size="icon" onClick={() => openEditForm(item)} aria-label="Edit item" disabled={isDialogSubmitting}>
                           <Edit3 className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => openDeleteDialog(item)} className="text-destructive hover:text-destructive/80" aria-label="Delete item">
+                        <Button variant="ghost" size="icon" onClick={() => openDeleteDialog(item)} className="text-destructive hover:text-destructive/80" aria-label="Delete item" disabled={isDialogSubmitting}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </TableCell>
@@ -209,24 +230,23 @@ export default function MenuManagementPage() {
         </CardContent>
       </Card>
 
-      {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center"><AlertTriangle className="mr-2 h-5 w-5 text-destructive"/>Confirm Deletion</DialogTitle>
             <DialogDescription>
-              This action cannot be undone and will permanently delete the menu item.
+              This action cannot be undone and will permanently delete the menu item {itemToDelete?.imageUrl && itemToDelete.imageUrl.includes('firebasestorage') ? 'and its image from storage' : ''}.
             </DialogDescription>
           </DialogHeader>
           <p className="py-2">
             Are you sure you want to delete the menu item: <strong>{itemToDelete?.name}</strong>?
           </p>
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} disabled={isSubmitting}>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} disabled={isDialogSubmitting}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDeleteConfirm} disabled={isSubmitting}>
-              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            <Button variant="destructive" onClick={handleDeleteConfirm} disabled={isDialogSubmitting}>
+              {isDialogSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Delete
             </Button>
           </DialogFooter>
@@ -235,4 +255,3 @@ export default function MenuManagementPage() {
     </div>
   );
 }
-
