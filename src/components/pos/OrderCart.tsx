@@ -110,7 +110,7 @@ export default function OrderCart({ onPrintRequest }: OrderCartProps) {
                       type="number"
                       value={item.quantity}
                       onChange={(e) => updateItemQuantity(item.id, parseInt(e.target.value) || 0)}
-                      className="w-10 text-center h-7 text-sm"
+                      className="w-10 text-center h-7 text-sm px-1.5 py-1" // Adjusted padding here
                       aria-label={`${item.name} quantity`}
                       disabled={isProcessing}
                     />
@@ -196,3 +196,4 @@ export default function OrderCart({ onPrintRequest }: OrderCartProps) {
     </Card>
   );
 }
+
