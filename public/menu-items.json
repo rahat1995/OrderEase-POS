@@ -1,0 +1,13 @@
+
+[
+  { "id": "pizza-m", "name": "Pizza Margherita", "price": 12.99, "imageUrl": "https://placehold.co/300x200.png", "dataAiHint": "pizza cheese" },
+  { "id": "burger-c", "name": "Classic Burger", "price": 8.50, "imageUrl": "https://placehold.co/300x200.png", "dataAiHint": "burger beef" },
+  { "id": "fries-s", "name": "Crispy Fries", "price": 3.00, "imageUrl": "https://placehold.co/300x200.png", "dataAiHint": "french fries" },
+  { "id": "coke-z", "name": "Cola Drink", "price": 2.00, "imageUrl": "https://placehold.co/300x200.png", "dataAiHint": "soda can" },
+  { "id": "salad-g", "name": "Garden Salad", "price": 7.50, "imageUrl": "https://placehold.co/300x200.png", "dataAiHint": "fresh salad" },
+  { "id": "pasta-b", "name": "Pasta Bolognese", "price": 11.00, "imageUrl": "https://placehold.co/300x200.png", "dataAiHint": "pasta meat" },
+  { "id": "sand-t", "name": "Turkey Sandwich", "price": 6.75, "imageUrl": "https://placehold.co/300x200.png", "dataAiHint": "sandwich deli" },
+  { "id": "juice-o", "name": "Orange Juice", "price": 3.50, "imageUrl": "https://placehold.co/300x200.png", "dataAiHint": "orange juice" },
+  { "id": "ice-cream-v", "name": "Vanilla Ice Cream", "price": 4.25, "imageUrl": "https://placehold.co/300x200.png", "dataAiHint": "ice cream" },
+  { "id": "coffee-l", "name": "Latte Coffee", "price": 3.75, "imageUrl": "https://placehold.co/300x200.png", "dataAiHint": "coffee cup" }
+]

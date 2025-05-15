@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import type { MenuItem, CartItem, Order } from '@/types';
 import { toast } from "@/hooks/use-toast";
+import { saveOrderAction } from '@/app/actions/orderActions';
 
 interface OrderState {
   items: CartItem[];
@@ -24,7 +25,7 @@ interface OrderContextType extends OrderState {
   getSubtotal: () => number;
   getDiscountAmount: () => number;
   getTotal: () => number;
-  finalizeOrder: () => Order | null;
+  finalizeOrder: () => Promise<Order | null>; // Changed to Promise
   clearOrder: () => void;
 }
 
@@ -33,7 +34,7 @@ const OrderContext = createContext<OrderContextType | undefined>(undefined);
 export const OrderProvider = ({ children }: { children: ReactNode }) => {
   const [items, setItems] = useState<CartItem[]>([]);
   const [discountValue, setDiscountValue] = useState<number>(0);
-  const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('fixed'); // Default to fixed
+  const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('fixed');
   const [customerName, setCustomerName] = useState<string>('');
   const [customerMobile, setCustomerMobile] = useState<string>('');
 
@@ -64,7 +65,7 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
   }, [removeItem]);
 
   const applyDiscount = useCallback((value: number, type: 'percentage' | 'fixed') => {
-    setDiscountValue(value < 0 ? 0 : value); // Ensure discount is not negative
+    setDiscountValue(value < 0 ? 0 : value);
     setDiscountType(type);
   }, []);
 
@@ -74,7 +75,10 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const generateOrderToken = useCallback((): string => {
-    return `TKN-${Date.now().toString().slice(-6)}`;
+    // Generate a more unique token, perhaps combining timestamp with a random part
+    const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const timePart = Date.now().toString().slice(-6);
+    return `TKN-${timePart}-${randomPart}`;
   }, []);
   
   const getSubtotal = useCallback((): number => {
@@ -89,7 +93,6 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
     } else {
       calculatedDiscount = discountValue;
     }
-    // Discount cannot exceed subtotal, and discount cannot be negative
     calculatedDiscount = Math.max(0, calculatedDiscount); 
     return Math.min(calculatedDiscount, subtotal);
   }, [getSubtotal, discountValue, discountType]);
@@ -101,20 +104,20 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
   const clearOrder = useCallback(() => {
     setItems([]);
     setDiscountValue(0);
-    setDiscountType('fixed'); // Reset to fixed
+    setDiscountType('fixed');
     setCustomerName('');
     setCustomerMobile('');
     toast({ title: "Cart Cleared", description: "Ready for a new order." });
   }, []);
 
-  const finalizeOrder = useCallback((): Order | null => {
+  const finalizeOrder = useCallback(async (): Promise<Order | null> => {
     if (items.length === 0) {
       toast({ title: "Cannot Finalize", description: "Cart is empty.", variant: "destructive" });
       return null;
     }
     const token = generateOrderToken();
-    const order: Order = {
-      id: token,
+    const orderData: Order = {
+      id: token, // For client-side identification, actual DB ID will come from Firestore
       token,
       items,
       subtotal: getSubtotal(),
@@ -125,10 +128,23 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
       orderDate: new Date().toISOString(),
     };
     
-    // Simulate saving to Excel
-    console.log("Order Saved (Simulated):", JSON.stringify(order, null, 2));
-    toast({ title: "Order Finalized", description: `Token: ${token}. Preparing for print.`});
-    return order;
+    try {
+      toast({ title: "Saving Order...", description: `Token: ${token}. Please wait.`});
+      const result = await saveOrderAction(orderData);
+      if (result.success && result.orderId) {
+        toast({ title: "Order Saved & Finalized", description: `DB ID: ${result.orderId}, Token: ${token}. Preparing for print.`});
+        return { ...orderData, id: result.orderId }; // Return order with Firestore ID
+      } else {
+        throw new Error(result.error || "Failed to save order to database.");
+      }
+    } catch (error) {
+      console.error("Error saving order:", error);
+      toast({ title: "Error Saving Order", description: (error instanceof Error ? error.message : "Unknown error") + " Check console for details.", variant: "destructive" });
+      // Fallback: Still return order data for printing if DB save fails, but with original token ID.
+      // This allows printing to proceed even if DB connection is down.
+      toast({ title: "Order Finalized (Locally)", description: `Token: ${token}. DB save failed. Preparing for print.` , variant: "destructive"});
+      return orderData; 
+    }
   }, [items, getSubtotal, getDiscountAmount, getTotal, customerName, customerMobile, generateOrderToken]);
 
 
