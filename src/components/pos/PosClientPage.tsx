@@ -7,18 +7,21 @@ import OrderCart from '@/components/pos/OrderCart';
 import PrintReceipt from '@/components/pos/PrintReceipt';
 import type { MenuItem, Order } from '@/types';
 import { useOrder } from '@/contexts/OrderContext';
-import { PackageOpen } from 'lucide-react';
+import { PackageOpen, AlertTriangle } from 'lucide-react'; // Added AlertTriangle
 import { toast } from '@/hooks/use-toast';
 
 interface PosClientPageProps {
-  initialMenuItems: MenuItem[];
+  initialMenuItems: MenuItem[]; // This will now come from Firestore via server component
 }
 
 export default function PosClientPage({ initialMenuItems }: PosClientPageProps) {
+  // No need to fetch menu items here anymore, they are passed as props
   const [menuItems, setMenuItems] = useState<MenuItem[]>(initialMenuItems);
   const [orderForPrint, setOrderForPrint] = useState<Order | null>(null);
   const { clearOrder } = useOrder();
 
+  // Update menu items if initialMenuItems prop changes (e.g., after admin updates)
+  // This might not be strictly necessary if navigation re-fetches, but good for robustness
   useEffect(() => {
     setMenuItems(initialMenuItems);
   }, [initialMenuItems]);
@@ -40,13 +43,16 @@ export default function PosClientPage({ initialMenuItems }: PosClientPageProps) 
     if (orderForPrint) {
       const printAction = () => {
         window.print();
+        // Delay clearing order to allow print dialog to process fully
+        // and to ensure the receipt component has rendered with order data.
         setTimeout(() => {
           clearOrder();
-          setOrderForPrint(null);
+          setOrderForPrint(null); // Clear the order from state after printing and clearing context
           toast({ title: "Printing complete.", description: "Cart has been cleared." });
-        }, 500); 
+        }, 500); // Adjust delay if needed
       };
       
+      // Short delay before triggering print to ensure component re-renders with orderForPrint
       const timer = setTimeout(printAction, 100); 
       return () => clearTimeout(timer);
     }
@@ -63,10 +69,15 @@ export default function PosClientPage({ initialMenuItems }: PosClientPageProps) 
             ))}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-            <PackageOpen className="w-16 h-16 mb-4" />
-            <p className="text-xl">No menu items available.</p>
-            <p className="text-sm">Check `public/menu-items.json` or server logs.</p>
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-6 rounded-lg bg-card border shadow-md">
+            <PackageOpen className="w-20 h-20 mb-6 text-primary/70" />
+            <h2 className="text-2xl font-semibold mb-2">Menu is Empty</h2>
+            <p className="text-center max-w-md">
+              No menu items are currently available. Please add items through the 
+              <strong className="text-accent"> Menu Management </strong> 
+              page to populate the POS.
+            </p>
+            <p className="text-xs mt-4">If you recently added items, try refreshing the page.</p>
           </div>
         )}
       </main>

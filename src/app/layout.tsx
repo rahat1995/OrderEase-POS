@@ -1,12 +1,12 @@
 
 import type { Metadata } from 'next';
-import { Geist } from 'next/font/google'; // Removed Geist_Mono as it's not explicitly used in body
+import { Geist } from 'next/font/google'; 
 import Link from 'next/link';
 import './globals.css';
 import { OrderProvider } from '@/contexts/OrderContext';
 import { Toaster } from '@/components/ui/toaster';
 import { Button }        from '@/components/ui/button';
-import { Home, FileText } from 'lucide-react';
+import { Home, FileText, ListPlus } from 'lucide-react';
 
 
 const geistSans = Geist({
@@ -14,7 +14,6 @@ const geistSans = Geist({
   subsets: ['latin'],
 });
 
-// Removed geistMono as it's not applied to body directly. If specific components need it, they can import it.
 
 export const metadata: Metadata = {
   title: 'OrderEase POS',
@@ -48,10 +47,15 @@ export default function RootLayout({
                     <FileText className="mr-2 h-4 w-4" /> Sales Report
                   </Link>
                 </Button>
+                <Button asChild variant="ghost">
+                  <Link href="/admin/menu">
+                    <ListPlus className="mr-2 h-4 w-4" /> Menu Management
+                  </Link>
+                </Button>
               </div>
             </nav>
           </header>
-          <div className="min-h-[calc(100vh-var(--header-height,60px))]"> {/* Adjust var if header height changes */}
+          <div className="min-h-[calc(100vh-var(--header-height,60px))]"> 
             {children}
           </div>
           <Toaster />

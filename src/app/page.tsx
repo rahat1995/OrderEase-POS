@@ -1,18 +1,16 @@
 
-import fs from 'fs/promises';
-import path from 'path';
 import type { MenuItem } from '@/types';
 import PosClientPage from '@/components/pos/PosClientPage';
+import { fetchMenuItemsAction } from '@/app/actions/menuActions';
 
+// This function is now server-side and fetches from Firestore
 async function getMenuItems(): Promise<MenuItem[]> {
   try {
-    const filePath = path.join(process.cwd(), 'public', 'menu-items.json');
-    const jsonData = await fs.readFile(filePath, 'utf-8');
-    const menuItems = JSON.parse(jsonData);
+    const menuItems = await fetchMenuItemsAction();
     return menuItems;
   } catch (error) {
-    console.error("Failed to load menu items:", error);
-    return []; // Return empty array or handle error as appropriate
+    console.error("Failed to load menu items from Firestore:", error);
+    return []; 
   }
 }
 
