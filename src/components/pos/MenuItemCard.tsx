@@ -28,17 +28,18 @@ export default function MenuItemCard({ item }: MenuItemCardProps) {
           />
         </div>
       </CardHeader>
-      <CardContent className="p-4 flex-grow">
-        <CardTitle className="text-lg mb-1">{item.name}</CardTitle>
-        <p className="text-foreground/80 font-semibold">${item.price.toFixed(2)}</p>
+      <CardContent className="p-3 flex-grow">
+        <CardTitle className="text-base font-medium mb-1 leading-tight">{item.name}</CardTitle>
+        <p className="text-sm text-foreground/80 font-semibold">${item.price.toFixed(2)}</p>
       </CardContent>
-      <CardFooter className="p-4 pt-0">
+      <CardFooter className="p-3 pt-0">
         <Button 
           onClick={() => addItem(item)} 
           className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
           aria-label={`Add ${item.name} to cart`}
+          size="sm"
         >
-          <PlusCircle className="mr-2 h-5 w-5" /> Add to Cart
+          <PlusCircle className="mr-1.5 h-4 w-4" /> Add to Cart
         </Button>
       </CardFooter>
     </Card>

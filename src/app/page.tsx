@@ -82,10 +82,10 @@ export default function OrderPage() {
 
   return (
     <div className="flex flex-col md:flex-row h-screen max-h-screen overflow-hidden bg-background">
-      <main className="flex-1 p-6 overflow-y-auto">
-        <h1 className="text-3xl font-bold mb-6 text-primary">Menu</h1>
+      <main className="flex-1 p-4 md:p-6 overflow-y-auto">
+        <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-6 text-primary">Menu</h1>
         {menuItems.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {menuItems.map((item) => (
               <MenuItemCard key={item.id} item={item} />
             ))}

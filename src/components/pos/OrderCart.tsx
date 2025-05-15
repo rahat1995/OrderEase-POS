@@ -22,7 +22,7 @@ export default function OrderCart({ onPrint }: OrderCartProps) {
     removeItem,
     updateItemQuantity,
     discountValue,
-    discountType,
+    discountType, // This is from context, now defaults to 'fixed'
     applyDiscount,
     customerName,
     customerMobile,
@@ -35,6 +35,7 @@ export default function OrderCart({ onPrint }: OrderCartProps) {
   } = useOrder();
 
   const [currentDiscountValue, setCurrentDiscountValue] = useState(discountValue.toString());
+  // Initialize local discount type from context, which now defaults to 'fixed'
   const [currentDiscountType, setCurrentDiscountType] = useState<'percentage' | 'fixed'>(discountType);
   const [currentCustomerName, setCurrentCustomerName] = useState(customerName);
   const [currentCustomerMobile, setCurrentCustomerMobile] = useState(customerMobile);
@@ -43,6 +44,7 @@ export default function OrderCart({ onPrint }: OrderCartProps) {
     setCurrentDiscountValue(discountValue.toString());
   }, [discountValue]);
 
+  // Sync local discount type with context if it changes
   useEffect(() => {
     setCurrentDiscountType(discountType);
   }, [discountType]);
@@ -123,29 +125,31 @@ export default function OrderCart({ onPrint }: OrderCartProps) {
           )}
         </ScrollArea>
       </CardContent>
-      <CardFooter className="p-4 border-t flex-col space-y-4">
+      <CardFooter className="p-4 border-t flex-col space-y-3">
         <div>
-          <Label htmlFor="customerName" className="flex items-center mb-1"><User className="mr-2 h-4 w-4"/>Customer Name (Optional)</Label>
+          <Label htmlFor="customerName" className="flex items-center mb-0.5 text-xs"><User className="mr-1.5 h-3.5 w-3.5"/>Customer Name (Optional)</Label>
           <Input 
             id="customerName" 
             placeholder="John Doe" 
             value={currentCustomerName}
             onChange={(e) => setCurrentCustomerName(e.target.value)}
             onBlur={handleSetCustomerInfo}
+            className="h-8 text-xs"
           />
         </div>
         <div>
-          <Label htmlFor="customerMobile" className="flex items-center mb-1"><Phone className="mr-2 h-4 w-4"/>Mobile Number (Optional)</Label>
+          <Label htmlFor="customerMobile" className="flex items-center mb-0.5 text-xs"><Phone className="mr-1.5 h-3.5 w-3.5"/>Mobile Number (Optional)</Label>
           <Input 
             id="customerMobile" 
             placeholder="555-1234" 
             value={currentCustomerMobile}
             onChange={(e) => setCurrentCustomerMobile(e.target.value)}
             onBlur={handleSetCustomerInfo}
+            className="h-8 text-xs"
           />
         </div>
         <div className="w-full">
-          <Label htmlFor="discountValue" className="mb-1 block">Discount</Label>
+          <Label htmlFor="discountValue" className="mb-1 block text-sm">Discount</Label>
           <div className="flex space-x-2">
             <Input
               id="discountValue"
@@ -153,27 +157,27 @@ export default function OrderCart({ onPrint }: OrderCartProps) {
               placeholder="e.g. 10"
               value={currentDiscountValue}
               onChange={(e) => setCurrentDiscountValue(e.target.value)}
-              className="flex-grow"
+              className="flex-grow h-9"
             />
             <Select value={currentDiscountType} onValueChange={(value: 'percentage' | 'fixed') => setCurrentDiscountType(value)}>
-              <SelectTrigger className="w-[120px]">
+              <SelectTrigger className="w-[100px] h-9 text-xs">
                 <SelectValue placeholder="Type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="percentage">%</SelectItem>
-                <SelectItem value="fixed">$</SelectItem>
+                <SelectItem value="fixed">$ (Amount)</SelectItem>
+                <SelectItem value="percentage">% (Percent)</SelectItem>
               </SelectContent>
             </Select>
-            <Button onClick={handleApplyDiscount} variant="outline">Apply</Button>
+            <Button onClick={handleApplyDiscount} variant="outline" size="sm" className="h-9">Apply</Button>
           </div>
         </div>
         
-        <div className="w-full space-y-1 text-right">
-          <p>Subtotal: <span className="font-semibold">${subtotal.toFixed(2)}</span></p>
+        <div className="w-full space-y-1 text-right mt-2">
+          <p className="text-sm">Subtotal: <span className="font-semibold">${subtotal.toFixed(2)}</span></p>
           {discountAmount > 0 && (
-            <p>Discount: <span className="font-semibold text-accent">-${discountAmount.toFixed(2)}</span></p>
+            <p  className="text-sm">Discount: <span className="font-semibold text-accent">-${discountAmount.toFixed(2)}</span></p>
           )}
-          <p className="text-xl font-bold">Total: <span className="text-accent">${total.toFixed(2)}</span></p>
+          <p className="text-lg font-bold">Total: <span className="text-accent">${total.toFixed(2)}</span></p>
         </div>
         
         <div className="w-full flex space-x-2 mt-2">
@@ -186,4 +190,3 @@ export default function OrderCart({ onPrint }: OrderCartProps) {
     </Card>
   );
 }
-

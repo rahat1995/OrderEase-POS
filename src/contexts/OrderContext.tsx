@@ -33,7 +33,7 @@ const OrderContext = createContext<OrderContextType | undefined>(undefined);
 export const OrderProvider = ({ children }: { children: ReactNode }) => {
   const [items, setItems] = useState<CartItem[]>([]);
   const [discountValue, setDiscountValue] = useState<number>(0);
-  const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
+  const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('fixed'); // Default to fixed
   const [customerName, setCustomerName] = useState<string>('');
   const [customerMobile, setCustomerMobile] = useState<string>('');
 
@@ -89,7 +89,9 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
     } else {
       calculatedDiscount = discountValue;
     }
-    return Math.min(calculatedDiscount, subtotal); // Discount cannot exceed subtotal
+    // Discount cannot exceed subtotal, and discount cannot be negative
+    calculatedDiscount = Math.max(0, calculatedDiscount); 
+    return Math.min(calculatedDiscount, subtotal);
   }, [getSubtotal, discountValue, discountType]);
 
   const getTotal = useCallback((): number => {
@@ -99,7 +101,7 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
   const clearOrder = useCallback(() => {
     setItems([]);
     setDiscountValue(0);
-    setDiscountType('percentage');
+    setDiscountType('fixed'); // Reset to fixed
     setCustomerName('');
     setCustomerMobile('');
     toast({ title: "Cart Cleared", description: "Ready for a new order." });
