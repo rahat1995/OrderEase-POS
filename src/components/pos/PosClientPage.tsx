@@ -11,7 +11,6 @@ import { fetchMenuItemsAction } from '@/app/actions/menuActions';
 import { PackageOpen, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
-// No longer takes initialMenuItems as a prop
 export default function PosClientPage() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -23,18 +22,35 @@ export default function PosClientPage() {
     try {
       const items = await fetchMenuItemsAction();
       setMenuItems(items);
+      if (items.length === 0 && !isLoading) { // Check if still loading to avoid premature toast
+        toast({
+          title: "Menu Information",
+          description: "No menu items were found. Please add items via Menu Management.",
+          variant: "default",
+          duration: 5000,
+        });
+      }
     } catch (error) {
-      console.error("Failed to load menu items:", error);
+      console.error("Failed to load menu items on POS page:", error);
+      let description = "Could not fetch menu items. Please try again later.";
+      if (error instanceof Error) {
+        description = error.message;
+        // Check for Firestore permission denied error code
+        if ((error as any).code === 'permission-denied' || (error as any).code === 'PERMISSION_DENIED') {
+          description = "Permission denied when fetching menu items. Please check your Firebase security rules for the 'menuItems' collection to allow reads.";
+        }
+      }
       toast({
         title: "Error Loading Menu",
-        description: (error as Error).message || "Could not fetch menu items.",
+        description: description,
         variant: "destructive",
+        duration: 10000, // Longer duration for important errors
       });
       setMenuItems([]); // Set to empty array on error
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, []); // Removed toast from dependencies as it's stable from useToast
 
   useEffect(() => {
     loadMenuItems();
@@ -61,10 +77,10 @@ export default function PosClientPage() {
           clearOrder();
           setOrderForPrint(null);
           toast({ title: "Printing complete.", description: "Cart has been cleared." });
-        }, 500); 
+        }, 500);
       };
-      
-      const timer = setTimeout(printAction, 100); 
+
+      const timer = setTimeout(printAction, 100);
       return () => clearTimeout(timer);
     }
   }, [orderForPrint, clearOrder]);
@@ -93,11 +109,11 @@ export default function PosClientPage() {
             <PackageOpen className="w-20 h-20 mb-6 text-primary/70" />
             <h2 className="text-2xl font-semibold mb-2">Menu is Empty</h2>
             <p className="text-center max-w-md">
-              No menu items are currently available. Please add items through the 
-              <strong className="text-accent"> Menu Management </strong> 
+              No menu items are currently available. Please add items through the
+              <strong className="text-accent"> Menu Management </strong>
               page to populate the POS.
             </p>
-            <p className="text-xs mt-4">If you recently added items, this page should update automatically. You can also try refreshing.</p>
+            <p className="text-xs mt-4">If you recently added items and they are not appearing, please check for error messages or verify your Firebase setup (especially Firestore security rules).</p>
           </div>
         )}
       </main>
