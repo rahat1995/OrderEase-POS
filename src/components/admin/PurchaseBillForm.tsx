@@ -60,7 +60,7 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, suppli
     resolver: zodResolver(purchaseBillFormSchema),
     defaultValues: {
       billDate: new Date(),
-      supplierId: '', // Empty string will use placeholder
+      supplierId: NO_SUPPLIER_VALUE, // Default to "No Supplier"
       billNumber: '',
       purchaseOrderNumber: '',
       items: [],
@@ -100,25 +100,33 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, suppli
       amount: amount,
     });
 
-    setSelectedCategoryId('');
-    setCurrentItemId(''); 
+    // Reset item input fields, but keep category if more items from same category are expected
+    // setSelectedCategoryId(''); // Optional: reset category or keep it
+    setCurrentItemId('');
     setCurrentItemAmount('');
+    // Focus back on item selection or amount for faster entry? (Advanced)
   };
 
   const onSubmit: SubmitHandler<PurchaseBillFormData> = async (data) => {
     setIsSubmitting(true);
 
-    let selectedSupplier: Supplier | undefined = undefined;
+    let finalSupplierId: string | undefined = undefined;
+    let finalSupplierName: string | undefined = undefined;
+
     if (data.supplierId && data.supplierId !== NO_SUPPLIER_VALUE) {
-        selectedSupplier = suppliers.find(s => s.id === data.supplierId);
+        const selectedSupplier = suppliers.find(s => s.id === data.supplierId);
+        if (selectedSupplier) {
+            finalSupplierId = selectedSupplier.id;
+            finalSupplierName = selectedSupplier.name;
+        }
     }
 
     const billDetails = {
       billDate: data.billDate.toISOString(),
-      supplierId: selectedSupplier?.id,
-      supplierName: selectedSupplier?.name,
-      billNumber: data.billNumber || undefined,
-      purchaseOrderNumber: data.purchaseOrderNumber || undefined,
+      supplierId: finalSupplierId,
+      supplierName: finalSupplierName,
+      billNumber: data.billNumber?.trim() || undefined,
+      purchaseOrderNumber: data.purchaseOrderNumber?.trim() || undefined,
     };
 
     const itemsForAction = data.items.map(item => ({
@@ -136,7 +144,7 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, suppli
         toast({ title: "Purchase Bill Added", description: `Bill with ${result.costEntries.length} items saved.` });
         form.reset({
           billDate: new Date(),
-          supplierId: '',
+          supplierId: NO_SUPPLIER_VALUE,
           billNumber: '',
           purchaseOrderNumber: '',
           items: [],
@@ -200,10 +208,10 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, suppli
                 name="supplierId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="flex items-center"><Users className="mr-1.5 h-4 w-4 text-muted-foreground"/>Supplier (Optional)</FormLabel>
-                    <Select 
-                        onValueChange={field.onChange} 
-                        value={field.value} 
+                    <FormLabel className="flex items-center"><Users className="mr-1.5 h-4 w-4 text-muted-foreground"/>Supplier</FormLabel>
+                    <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
                         disabled={isSubmitting}
                     >
                       <FormControl>
@@ -231,7 +239,7 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, suppli
               <CardContent className="space-y-3 p-2">
                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 items-end">
                     <FormItem>
-                      <FormLabel>Category</FormLabel>
+                      <FormLabel>Category *</FormLabel>
                       <Select onValueChange={(value) => {setSelectedCategoryId(value); setCurrentItemId('');}} value={selectedCategoryId} disabled={isSubmitting || costCategories.length === 0}>
                         <FormControl><SelectTrigger><SelectValue placeholder="Select Category" /></SelectTrigger></FormControl>
                         <SelectContent>
@@ -242,7 +250,7 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, suppli
                     <FormItem>
                       <FormLabel>Purchase Item *</FormLabel>
                       <Select
-                        key={`item-select-${selectedCategoryId}`} 
+                        key={`item-select-${selectedCategoryId}`}
                         onValueChange={(value) => setCurrentItemId(value)}
                         value={currentItemId}
                         disabled={isSubmitting || !selectedCategoryId || filteredPurchaseItems.length === 0}
@@ -313,4 +321,3 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, suppli
     </Card>
   );
 }
-
