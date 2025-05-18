@@ -6,7 +6,7 @@ import { useForm, useFieldArray, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from 'date-fns';
-import type { CostCategory, PurchaseItem, PurchaseBill, CreateCostEntryInput, CreatePurchaseBillInput } from '@/types';
+import type { CostCategory, PurchaseItem, PurchaseBill, CostEntry, CreatePurchaseBillInput } from '@/types'; // Added CostEntry here
 import { addPurchaseBillWithEntriesAction } from '@/app/actions/costActions';
 
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Loader2, PlusCircle, CalendarIcon, ReceiptText, PackagePlus, Trash2, FileText } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const costEntryItemSchema = z.object({
   purchaseItemId: z.string().min(1, "Purchase item is required."),
@@ -107,13 +108,12 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, onBill
     });
 
     // Reset temporary item fields
-    setSelectedCategoryId(''); // This will also reset currentItemId via useEffect or direct state clear
+    setSelectedCategoryId(''); 
     setCurrentItemId('');
     setCurrentItemName('');
     setCurrentItemAmount('');
     setCurrentItemCategoryId('');
     setCurrentItemCategoryName('');
-    form.setValue('items.ADD_ITEM_FIELD.purchaseItemId' as any, ''); // HACK: to reset select trigger. Better to have separate form for adding items.
   };
   
   const onSubmit: SubmitHandler<PurchaseBillFormData> = async (data) => {
@@ -121,15 +121,13 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, onBill
 
     const billDetails = {
       billDate: data.billDate.toISOString(),
-      supplierName: data.supplierName,
-      billNumber: data.billNumber,
-      purchaseOrderNumber: data.purchaseOrderNumber,
-      supplierAddress: data.supplierAddress,
-      supplierMobile: data.supplierMobile,
+      supplierName: data.supplierName || undefined,
+      billNumber: data.billNumber || undefined,
+      purchaseOrderNumber: data.purchaseOrderNumber || undefined,
+      supplierAddress: data.supplierAddress || undefined,
+      supplierMobile: data.supplierMobile || undefined,
     };
     
-    // The items array in `data.items` already has the correct structure
-    // with categoryId and categoryName denormalized from selectedPurchaseItem
     const itemsForAction = data.items.map(item => ({
       purchaseItemId: item.purchaseItemId,
       purchaseItemName: item.purchaseItemName,
@@ -152,11 +150,18 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, onBill
           supplierMobile: '',
           items: [],
         });
+        // Also reset temporary item fields after successful submission
+        setSelectedCategoryId('');
+        setCurrentItemId('');
+        setCurrentItemName('');
+        setCurrentItemAmount('');
+        setCurrentItemCategoryId('');
+        setCurrentItemCategoryName('');
         onBillAdded(result.purchaseBill, result.costEntries);
       } else {
         throw new Error(result.error || "Failed to add purchase bill.");
       }
-    } catch (error)_ {
+    } catch (error) {
       toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
     } finally {
       setIsSubmitting(false);
@@ -164,7 +169,7 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, onBill
   };
 
   return (
-    <Card className="shadow-lg col-span-1 md:col-span-2"> {/* Make it span more columns */}
+    <Card className="shadow-lg col-span-1 md:col-span-2">
       <CardHeader>
         <div className="flex items-center space-x-2">
           <ReceiptText className="h-7 w-7 text-accent" />
@@ -218,7 +223,7 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, onBill
                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 items-end">
                     <FormItem>
                       <FormLabel>Category</FormLabel>
-                      <Select onValueChange={(value) => {setSelectedCategoryId(value); setCurrentItemId('');}} value={selectedCategoryId} disabled={isSubmitting || costCategories.length === 0}>
+                      <Select onValueChange={(value) => {setSelectedCategoryId(value); setCurrentItemId(''); setCurrentItemName('');}} value={selectedCategoryId} disabled={isSubmitting || costCategories.length === 0}>
                         <FormControl><SelectTrigger><SelectValue placeholder="Select Category" /></SelectTrigger></FormControl>
                         <SelectContent>
                           {costCategories.map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}
@@ -228,6 +233,7 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, onBill
                     <FormItem>
                       <FormLabel>Purchase Item *</FormLabel>
                       <Select 
+                        key={selectedCategoryId} // Add key to force re-render when category changes to reset value
                         onValueChange={(value) => {
                             const item = purchaseItems.find(pi => pi.id === value);
                             if(item) {
@@ -245,7 +251,7 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, onBill
                       >
                         <FormControl><SelectTrigger><SelectValue placeholder="Select Item" /></SelectTrigger></FormControl>
                         <SelectContent>
-                          {filteredPurchaseItems.length === 0 && <SelectItem value="-" disabled>No items in category or category not selected</SelectItem>}
+                          {filteredPurchaseItems.length === 0 && <SelectItem value="-" disabled>{selectedCategoryId ? "No items in category" : "Select category first"}</SelectItem>}
                           {filteredPurchaseItems.map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}
                         </SelectContent>
                       </Select>
@@ -293,8 +299,6 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, onBill
                 name="items"
                 render={() => <FormMessage />} // To display array-level errors like "min(1)"
               />
-
-
           </CardContent>
           <CardFooter>
             <Button type="submit" disabled={isSubmitting || !form.formState.isValid || fields.length === 0} className="w-full bg-accent hover:bg-accent/90">
@@ -307,3 +311,5 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, onBill
     </Card>
   );
 }
+
+    
