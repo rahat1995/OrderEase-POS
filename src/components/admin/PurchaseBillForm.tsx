@@ -11,7 +11,6 @@ import { addPurchaseBillWithEntriesAction } from '@/app/actions/costActions';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-// import { Textarea } from '@/components/ui/textarea'; // No longer needed for supplier address
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -34,7 +33,7 @@ const costEntryItemSchema = z.object({
 
 const purchaseBillFormSchema = z.object({
   billDate: z.date({ required_error: "Bill date is required." }),
-  supplierId: z.string().optional(), // Made optional, can create bill without supplier
+  supplierId: z.string().optional(),
   billNumber: z.string().max(50).optional(),
   purchaseOrderNumber: z.string().max(50).optional(),
   items: z.array(costEntryItemSchema).min(1, { message: "Please add at least one item to the bill." }),
@@ -49,6 +48,8 @@ interface PurchaseBillFormProps {
   onBillAdded: (bill: PurchaseBill, entries: CostEntry[]) => void;
 }
 
+const NO_SUPPLIER_VALUE = "_direct_expense_";
+
 export default function PurchaseBillForm({ costCategories, purchaseItems, suppliers, onBillAdded }: PurchaseBillFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
@@ -59,7 +60,7 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, suppli
     resolver: zodResolver(purchaseBillFormSchema),
     defaultValues: {
       billDate: new Date(),
-      supplierId: '',
+      supplierId: '', // Empty string will use placeholder
       billNumber: '',
       purchaseOrderNumber: '',
       items: [],
@@ -99,22 +100,23 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, suppli
       amount: amount,
     });
 
-    // Reset item selection part
     setSelectedCategoryId('');
-    setCurrentItemId(''); // This should also reset the Select component if keyed properly or value bound to it.
+    setCurrentItemId(''); 
     setCurrentItemAmount('');
-    // form.setValue('currentItemIdField', ''); // If currentItemId was a direct form field.
   };
 
   const onSubmit: SubmitHandler<PurchaseBillFormData> = async (data) => {
     setIsSubmitting(true);
 
-    const selectedSupplier = suppliers.find(s => s.id === data.supplierId);
+    let selectedSupplier: Supplier | undefined = undefined;
+    if (data.supplierId && data.supplierId !== NO_SUPPLIER_VALUE) {
+        selectedSupplier = suppliers.find(s => s.id === data.supplierId);
+    }
 
     const billDetails = {
       billDate: data.billDate.toISOString(),
-      supplierId: selectedSupplier?.id || undefined,
-      supplierName: selectedSupplier?.name || undefined,
+      supplierId: selectedSupplier?.id,
+      supplierName: selectedSupplier?.name,
       billNumber: data.billNumber || undefined,
       purchaseOrderNumber: data.purchaseOrderNumber || undefined,
     };
@@ -160,7 +162,7 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, suppli
           <ReceiptText className="h-7 w-7 text-accent" />
           <CardTitle className="text-xl">Enter New Purchase Bill</CardTitle>
         </div>
-        <CardDescription>Record supplier bills and their individual item costs. Select a supplier or leave blank for direct expenses.</CardDescription>
+        <CardDescription>Record supplier bills and their individual item costs. Select a supplier or choose direct expense.</CardDescription>
       </CardHeader>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -199,10 +201,18 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, suppli
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="flex items-center"><Users className="mr-1.5 h-4 w-4 text-muted-foreground"/>Supplier (Optional)</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value} disabled={isSubmitting || suppliers.length === 0}>
-                      <FormControl><SelectTrigger><SelectValue placeholder="Select a supplier" /></SelectTrigger></FormControl>
+                    <Select 
+                        onValueChange={field.onChange} 
+                        value={field.value} 
+                        disabled={isSubmitting}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select supplier or direct expense" />
+                        </SelectTrigger>
+                      </FormControl>
                       <SelectContent>
-                        <SelectItem value="">No Supplier (Direct Expense)</SelectItem>
+                        <SelectItem value={NO_SUPPLIER_VALUE}>No Supplier (Direct Expense)</SelectItem>
                         {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -232,7 +242,7 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, suppli
                     <FormItem>
                       <FormLabel>Purchase Item *</FormLabel>
                       <Select
-                        key={`item-select-${selectedCategoryId}`} // Re-key to reset when category changes
+                        key={`item-select-${selectedCategoryId}`} 
                         onValueChange={(value) => setCurrentItemId(value)}
                         value={currentItemId}
                         disabled={isSubmitting || !selectedCategoryId || filteredPurchaseItems.length === 0}
@@ -289,7 +299,7 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, suppli
              <FormField
                 control={form.control}
                 name="items"
-                render={() => <FormMessage />}
+                render={() => <FormMessage />} // For displaying array-level errors if any
               />
           </CardContent>
           <CardFooter>
@@ -303,3 +313,4 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, suppli
     </Card>
   );
 }
+
