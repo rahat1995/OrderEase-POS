@@ -2,7 +2,7 @@
 'use server';
 
 import { db } from '@/lib/firebase';
-import { collection, addDoc, getDocs, query, where, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, where, Timestamp, orderBy } from 'firebase/firestore';
 import type { Order } from '@/types';
 
 export async function saveOrderAction(order: Order): Promise<{ success: boolean; orderId?: string; error?: string }> {
@@ -21,21 +21,40 @@ export async function saveOrderAction(order: Order): Promise<{ success: boolean;
   }
 }
 
-export async function fetchOrdersAction(startDate?: string, endDate?: string): Promise<Order[]> {
+export async function fetchOrdersAction(
+  startDate?: string,
+  endDate?: string,
+  customerName?: string,
+  customerMobile?: string
+): Promise<Order[]> {
   try {
     const ordersCol = collection(db, 'orders');
-    let q = query(ordersCol);
+    let q = query(ordersCol); // Base query
 
+    // Apply date filters
     if (startDate) {
       q = query(q, where('orderDate', '>=', Timestamp.fromDate(new Date(startDate))));
     }
     if (endDate) {
-      // Adjust end date to include the entire day
       const endOfDay = new Date(endDate);
       endOfDay.setHours(23, 59, 59, 999);
       q = query(q, where('orderDate', '<=', Timestamp.fromDate(endOfDay)));
     }
+
+    // Apply customer name filter (exact match, case-sensitive)
+    if (customerName && customerName.trim() !== '') {
+      q = query(q, where('customerName', '==', customerName.trim()));
+    }
+
+    // Apply customer mobile filter (exact match)
+    if (customerMobile && customerMobile.trim() !== '') {
+      q = query(q, where('customerMobile', '==', customerMobile.trim()));
+    }
     
+    // Add ordering after all filters
+    q = query(q, orderBy('orderDate', 'desc'));
+
+
     const querySnapshot = await getDocs(q);
     const orders = querySnapshot.docs.map(doc => {
       const data = doc.data();
@@ -45,9 +64,14 @@ export async function fetchOrdersAction(startDate?: string, endDate?: string): P
         orderDate: (data.orderDate as Timestamp).toDate().toISOString(), // Convert Timestamp back to ISO string
       } as Order;
     });
-    return orders.sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()); // Sort by most recent
+    // Sorting is now handled by Firestore's orderBy
+    return orders;
   } catch (error) {
     console.error("Error fetching orders: ", error);
-    return [];
+    // Propagate the error to be handled by the client
+    if (error instanceof Error) {
+      throw new Error(`Failed to fetch orders: ${error.message}`);
+    }
+    throw new Error("An unknown error occurred while fetching orders.");
   }
 }
