@@ -73,9 +73,9 @@ export default function SalesReportClient() {
   ) => {
     setIsLoading(true);
     setError(null);
-    setOrders([]); // Clear previous orders
-    setItemSalesReport({}); // Clear previous item sales report
-    setLastSearchCriteria({name: currentCustomerName, mobile: currentCustomerMobile});
+    setOrders([]); 
+    setItemSalesReport({}); 
+    setLastSearchCriteria({name: currentCustomerName.trim(), mobile: currentCustomerMobile.trim()});
 
     try {
       const fetchedOrders = await fetchOrdersAction(
@@ -93,10 +93,10 @@ export default function SalesReportClient() {
         const criteriaUsed = [
           currentDateRange.from ? `From: ${format(currentDateRange.from, "LLL dd, y")}` : '',
           currentDateRange.to ? `To: ${format(currentDateRange.to, "LLL dd, y")}` : '',
-          currentCustomerName ? `Customer: ${currentCustomerName}` : '',
-          currentCustomerMobile ? `Mobile: ${currentCustomerMobile}` : ''
+          currentCustomerName.trim() ? `Customer: ${currentCustomerName.trim()}` : '',
+          currentCustomerMobile.trim() ? `Mobile: ${currentCustomerMobile.trim()}` : ''
         ].filter(Boolean).join(', ');
-        toast({ title: "Orders Loaded", description: `${fetchedOrders.length} order(s) found. ${criteriaUsed}` });
+        toast({ title: "Orders Loaded", description: `${fetchedOrders.length} order(s) found. ${criteriaUsed || 'All dates for customer'}` });
       }
     } catch (e) {
       console.error("Failed to fetch orders:", e);
@@ -106,19 +106,39 @@ export default function SalesReportClient() {
     } finally {
       setIsLoading(false);
     }
-  }, [calculateItemSales]); // Add calculateItemSales to dependencies
+  }, [calculateItemSales]); 
+
+  const guardedFetchOrders = useCallback(async (
+    currentDateRange: { from?: Date; to?: Date },
+    currentCustomerName: string,
+    currentCustomerMobile: string
+  ) => {
+    const startDateString = currentDateRange.from ? format(currentDateRange.from, 'yyyy-MM-dd') : undefined;
+    // const endDateString = currentDateRange.to ? format(currentDateRange.to, 'yyyy-MM-dd') : undefined; // Not directly needed for guard
+    const hasCustomerFilter = currentCustomerName.trim() !== '' || currentCustomerMobile.trim() !== '';
+
+    if (!hasCustomerFilter && !startDateString) {
+      toast({
+        title: "Date Range Required",
+        description: "Please select at least a start date for the report if no customer is specified.",
+        variant: "destructive",
+      });
+      setIsLoading(false); // Ensure loading state is reset
+      setError("A start date is required for reports if no customer is specified."); // Set error state
+      setOrders([]); // Clear orders
+      setItemSalesReport({}); // Clear item sales
+      return;
+    }
+    await fetchOrders(currentDateRange, currentCustomerName, currentCustomerMobile);
+  }, [fetchOrders]);
+
 
   useEffect(() => {
-    // Fetch on initial load with default date range and no customer filters
-    if (dateRange) { // Ensure dateRange is initialized
-        fetchOrders(dateRange, customerNameQuery, customerMobileQuery);
+    if (dateRange) { 
+        guardedFetchOrders(dateRange, customerNameQuery, customerMobileQuery);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty dependency array to run only on mount, ESLint directive to bypass missing deps for initial load logic
-
-  const handleSearch = () => {
-    fetchOrders(dateRange, customerNameQuery, customerMobileQuery);
-  };
+  }, []); 
   
   const totalSales = orders.reduce((sum, order) => sum + order.total, 0);
   const totalDiscount = orders.reduce((sum, order) => sum + order.discountAmount, 0);
@@ -133,7 +153,8 @@ export default function SalesReportClient() {
         <CardHeader>
           <CardTitle>Filter Orders</CardTitle>
           <CardDescription>
-            Select date range and optionally filter by customer name or mobile (exact match, case-sensitive for name).
+            Select a date range to view reports. Date range is optional if filtering by customer name or mobile.
+            Customer name search is case-sensitive.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -147,11 +168,11 @@ export default function SalesReportClient() {
                         variant={"outline"}
                         className={cn(
                         "w-full sm:w-[260px] justify-start text-left font-normal",
-                        !dateRange.from && "text-muted-foreground"
+                        !dateRange?.from && "text-muted-foreground"
                         )}
                     >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {dateRange.from ? (
+                        {dateRange?.from ? (
                         dateRange.to ? (
                             <>
                             {format(dateRange.from, "LLL dd, y")} -{" "}
@@ -200,7 +221,7 @@ export default function SalesReportClient() {
                     />
                 </div>
             </div>
-             <Button onClick={handleSearch} disabled={isLoading} className="w-full sm:w-auto bg-accent hover:bg-accent/90">
+             <Button onClick={() => guardedFetchOrders(dateRange, customerNameQuery, customerMobileQuery)} disabled={isLoading} className="w-full sm:w-auto bg-accent hover:bg-accent/90">
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
                 Search Orders
             </Button>
@@ -223,7 +244,7 @@ export default function SalesReportClient() {
             </CardTitle>
             <CardDescription>
                 {isCustomerSearchActive 
-                    ? `Showing data for orders matching the customer criteria within the selected date range.`
+                    ? `Showing data for orders matching the customer criteria ${dateRange?.from || dateRange?.to ? 'within the selected date range' : 'across all dates'}.`
                     : `Summary for all orders within the selected date range.`
                 }
             </CardDescription>
@@ -269,7 +290,7 @@ export default function SalesReportClient() {
                 </TableHeader>
                 <TableBody>
                   {Object.entries(itemSalesReport)
-                    .sort(([, a], [, b]) => b.quantity - a.quantity) // Sort by quantity descending
+                    .sort(([, a], [, b]) => b.quantity - a.quantity) 
                     .map(([itemName, data]) => (
                     <TableRow key={itemName}>
                       <TableCell className="font-medium">{itemName}</TableCell>
@@ -301,7 +322,7 @@ export default function SalesReportClient() {
                 <CardTitle>Order Details</CardTitle>
                 <CardDescription>
                     {isCustomerSearchActive
-                        ? `Showing orders for ${lastSearchCriteria.name || lastSearchCriteria.mobile || 'selected customer'}.`
+                        ? `Showing orders for ${lastSearchCriteria.name || lastSearchCriteria.mobile || 'selected customer'}${dateRange?.from || dateRange?.to ? ' within the selected date range' : ' (all dates)'}.`
                         : `All orders within the selected date range.`
                     }
                 </CardDescription>
@@ -342,3 +363,4 @@ export default function SalesReportClient() {
     </div>
   );
 }
+
