@@ -6,7 +6,7 @@ import './globals.css';
 import { OrderProvider } from '@/contexts/OrderContext';
 import { Toaster } from '@/components/ui/toaster';
 import { Button } from '@/components/ui/button';
-import { Home, FileText, ListPlus, Landmark, TrendingUp } from 'lucide-react';
+import { Home, FileText, ListPlus, Landmark, TrendingUp, CreditCard } from 'lucide-react';
 
 
 const geistSans = Geist({
@@ -60,6 +60,11 @@ export default function RootLayout({
                 <Button asChild variant="ghost" size="sm">
                   <Link href="/admin/costing">
                     <Landmark className="mr-1.5 h-4 w-4" /> Cost Mgt.
+                  </Link>
+                </Button>
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/admin/supplier-payments">
+                    <CreditCard className="mr-1.5 h-4 w-4" /> Supplier Payments
                   </Link>
                 </Button>
               </div>

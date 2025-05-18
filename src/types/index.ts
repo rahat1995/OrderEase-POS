@@ -27,6 +27,7 @@ export interface Order {
 export interface CostCategory {
   id: string;
   name: string;
+  // nameLower: string; // Internal for uniqueness, not exposed in type
 }
 
 export type CreateCostCategoryInput = Omit<CostCategory, 'id'>;
@@ -47,6 +48,7 @@ export interface Supplier {
   mobile?: string;
   contactPerson?: string;
   email?: string;
+  // nameLower: string; // Internal for uniqueness, not exposed in type
 }
 export type CreateSupplierInput = Omit<Supplier, 'id'>;
 
@@ -57,13 +59,9 @@ export interface PurchaseBill {
   supplierName?: string; // Denormalized for easy display
   billNumber?: string;
   purchaseOrderNumber?: string;
-  // supplierAddress?: string; // Removed, should come from Supplier
-  // supplierMobile?: string; // Removed, should come from Supplier
   totalAmount: number; // Sum of all cost entries in this bill
   createdAt: string; // ISO string, for record keeping
 }
-// For CreatePurchaseBillInput, we don't need supplierAddress and supplierMobile directly here anymore
-// as they will be linked via supplierId.
 export type CreatePurchaseBillInput = Omit<PurchaseBill, 'id' | 'totalAmount' | 'createdAt'> & {
   items: Array<Omit<CreateCostEntryInput, 'date' | 'purchaseBillId' | 'categoryName' | 'categoryId' | 'purchaseItemCode' > & { categoryId: string, categoryName: string, purchaseItemCode?: string }>;
 };
@@ -82,3 +80,23 @@ export interface CostEntry {
 }
 
 export type CreateCostEntryInput = Omit<CostEntry, 'id'>;
+
+// Supplier Payment Module Types
+export interface SupplierPayment {
+  id: string;
+  supplierId: string;
+  supplierName: string; // Denormalized
+  paymentDate: string; // ISO String
+  amountPaid: number;
+  paymentMethod: string; // e.g., "Cash", "Bank Transfer", "Check"
+  notes?: string;
+  createdAt: string; // ISO String
+}
+
+export type CreateSupplierPaymentInput = Omit<SupplierPayment, 'id' | 'createdAt' | 'supplierName'>;
+
+export interface SupplierBalance extends Supplier {
+  totalBilled: number;
+  totalPaid: number;
+  currentDue: number;
+}
