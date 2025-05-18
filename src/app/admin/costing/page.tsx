@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from '@/hooks/use-toast';
-import { DollarSign, ListOrdered, Loader2, Package, ReceiptText, Banknote } from 'lucide-react'; // Added Banknote
+import { DollarSign, ListOrdered, Loader2, Package, ReceiptText, Banknote } from 'lucide-react';
 import { format } from 'date-fns';
 
 
@@ -32,11 +32,11 @@ export default function CostingManagementPage() {
       const [categories, items, entries] = await Promise.all([
         fetchCostCategoriesAction(),
         fetchPurchaseItemsAction(),
-        fetchCostEntriesAction(undefined, undefined) // Fetch all initially, then slice
+        fetchCostEntriesAction(undefined, undefined) 
       ]);
       
       setCostCategories(categories.sort((a, b) => a.name.localeCompare(b.name)));
-      setPurchaseItems(items.sort((a, b) => a.name.localeCompare(b.name)));
+      setPurchaseItems(items.sort((a, b) => (a.code || '').localeCompare(b.code || '') || a.name.localeCompare(b.name)));
       
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -64,11 +64,10 @@ export default function CostingManagementPage() {
   };
 
   const handlePurchaseItemAdded = (newItem: PurchaseItem) => {
-    setPurchaseItems(prev => [...prev, newItem].sort((a,b) => a.name.localeCompare(b.name)));
+    setPurchaseItems(prev => [...prev, newItem].sort((a,b) => (a.code || '').localeCompare(b.code || '') || a.name.localeCompare(b.name)));
   };
   
   const handlePurchaseBillAdded = (_newBill: PurchaseBill, newEntries: CostEntry[]) => {
-    // Refetch or update recent entries smartly
     setRecentCostEntries(prev => 
         [...newEntries, ...prev]
         .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -81,7 +80,7 @@ export default function CostingManagementPage() {
     <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-8">
       <CardHeader className="p-0 mb-6">
         <div className="flex items-center space-x-3">
-          <Banknote className="h-8 w-8 text-accent" /> {/* Changed Icon */}
+          <Banknote className="h-8 w-8 text-accent" /> 
           <div>
             <CardTitle className="text-2xl md:text-3xl">Cost & Purchase Management</CardTitle>
             <CardDescription>Manage expense categories, purchase items, and record supplier bills.</CardDescription>
@@ -141,7 +140,10 @@ export default function CostingManagementPage() {
                     <TableRow key={entry.id}>
                       <TableCell>{format(new Date(entry.date), "MMM dd, yyyy")}</TableCell>
                       <TableCell>{entry.categoryName}</TableCell>
-                      <TableCell className="font-medium">{entry.purchaseItemName}</TableCell>
+                      <TableCell className="font-medium">
+                        {entry.purchaseItemCode ? `[${entry.purchaseItemCode}] ` : ''}
+                        {entry.purchaseItemName}
+                      </TableCell>
                       <TableCell className="text-right">${entry.amount.toFixed(2)}</TableCell>
                     </TableRow>
                   ))}
