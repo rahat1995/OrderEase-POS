@@ -6,7 +6,7 @@ import './globals.css';
 import { OrderProvider } from '@/contexts/OrderContext';
 import { Toaster } from '@/components/ui/toaster';
 import { Button }        from '@/components/ui/button';
-import { Home, FileText, ListPlus } from 'lucide-react';
+import { Home, FileText, ListPlus, Landmark, TrendingUp } from 'lucide-react';
 
 
 const geistSans = Geist({
@@ -36,20 +36,30 @@ export default function RootLayout({
                   OrderEase POS
                 </a>
               </Link>
-              <div className="space-x-2">
-                <Button asChild variant="ghost">
+              <div className="space-x-1 flex-wrap">
+                <Button asChild variant="ghost" size="sm">
                   <Link href="/">
-                    <Home className="mr-2 h-4 w-4" /> POS
+                    <Home className="mr-1.5 h-4 w-4" /> POS
                   </Link>
                 </Button>
-                <Button asChild variant="ghost">
+                <Button asChild variant="ghost" size="sm">
                   <Link href="/reports/sales">
-                    <FileText className="mr-2 h-4 w-4" /> Sales Report
+                    <FileText className="mr-1.5 h-4 w-4" /> Sales Report
                   </Link>
                 </Button>
-                <Button asChild variant="ghost">
+                 <Button asChild variant="ghost" size="sm">
+                  <Link href="/reports/costing">
+                    <TrendingUp className="mr-1.5 h-4 w-4" /> Cost Report
+                  </Link>
+                </Button>
+                <Button asChild variant="ghost" size="sm">
                   <Link href="/admin/menu">
-                    <ListPlus className="mr-2 h-4 w-4" /> Menu Management
+                    <ListPlus className="mr-1.5 h-4 w-4" /> Menu Mgt.
+                  </Link>
+                </Button>
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/admin/costing">
+                    <Landmark className="mr-1.5 h-4 w-4" /> Cost Mgt.
                   </Link>
                 </Button>
               </div>
