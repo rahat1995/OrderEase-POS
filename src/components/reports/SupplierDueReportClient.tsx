@@ -1,8 +1,8 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
-import type { Supplier, SupplierBalance, SupplierPeriodicSummary, SupplierLedgerData, LedgerTransaction } from '@/types';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import type { Supplier, SupplierPeriodicSummary, SupplierLedgerData, LedgerTransaction } from '@/types';
 import { fetchSuppliersAction } from '@/app/actions/supplierActions';
 import { fetchSupplierPeriodicSummaryAction, fetchSupplierLedgerDataAction } from '@/app/actions/supplierPaymentActions';
 
@@ -21,6 +21,10 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const ALL_SUPPLIERS_VALUE = "_ALL_SUPPLIERS_";
 
+interface LedgerTransactionWithBalance extends LedgerTransaction {
+  runningBalance: number;
+}
+
 export default function SupplierDueReportClient() {
   const [suppliersList, setSuppliersList] = useState<Supplier[]>([]);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>(ALL_SUPPLIERS_VALUE);
@@ -34,6 +38,8 @@ export default function SupplierDueReportClient() {
   
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [initialSuppliersLoaded, setInitialSuppliersLoaded] = useState(false);
+
 
   const loadSuppliers = useCallback(async () => {
     try {
@@ -45,10 +51,6 @@ export default function SupplierDueReportClient() {
     }
   }, []);
 
-  useEffect(() => {
-    loadSuppliers();
-  }, [loadSuppliers]);
-
   const handleSearch = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -58,29 +60,24 @@ export default function SupplierDueReportClient() {
     const fromDateStr = dateRange.from ? dateRange.from.toISOString().split('T')[0] : undefined;
     const toDateStr = dateRange.to ? dateRange.to.toISOString().split('T')[0] : undefined;
 
-    if (!fromDateStr && !toDateStr && selectedSupplierId === ALL_SUPPLIERS_VALUE) {
-        toast({title: "Filter Required", description: "Please select a date range or a specific supplier.", variant: "destructive"});
-        setIsLoading(false);
-        return;
-    }
-
-
     try {
       if (selectedSupplierId === ALL_SUPPLIERS_VALUE) {
-        const summaries: SupplierPeriodicSummary[] = [];
-        // Fetch all suppliers again, or use suppliersList if it's guaranteed to be up-to-date
-        const currentSuppliers = suppliersList.length > 0 ? suppliersList : await fetchSuppliersAction();
-        if (currentSuppliers.length === 0) {
-            toast({ title: "No Suppliers", description: "No suppliers found to generate report." });
+        if (suppliersList.length === 0) {
+            toast({ title: "No Suppliers", description: "Please add suppliers first to see this report." });
             setIsLoading(false);
             return;
         }
-        for (const supplier of currentSuppliers) {
+        const summaries: SupplierPeriodicSummary[] = [];
+        for (const supplier of suppliersList) {
           const summary = await fetchSupplierPeriodicSummaryAction(supplier, fromDateStr, toDateStr);
           summaries.push(summary);
         }
         setReportDataAll(summaries.sort((a,b) => b.closingDue - a.closingDue));
-        toast({ title: "Report Generated", description: `Periodic summary for ${summaries.length} suppliers.` });
+        if (summaries.length > 0) {
+            toast({ title: "Report Generated", description: `Periodic summary for ${summaries.length} suppliers.` });
+        } else if (suppliersList.length > 0) {
+            toast({ title: "No Due Data", description: "No due data found for suppliers in the selected period." });
+        }
       } else {
         const ledgerData = await fetchSupplierLedgerDataAction(selectedSupplierId, fromDateStr, toDateStr);
         if (ledgerData) {
@@ -99,9 +96,24 @@ export default function SupplierDueReportClient() {
     }
   }, [selectedSupplierId, dateRange, suppliersList]);
 
+  // Effect to load suppliers once on mount
+  useEffect(() => {
+    setIsLoading(true);
+    loadSuppliers().finally(() => {
+      setInitialSuppliersLoaded(true);
+      // isLoading will be set to false by the subsequent handleSearch call or if handleSearch isn't called
+    });
+  }, [loadSuppliers]);
 
-  // Calculate totals for All Suppliers view
-  const grandTotalsAll = reportDataAll.reduce(
+  // Effect to run search when filters change or after initial suppliers are loaded
+  useEffect(() => {
+    if (initialSuppliersLoaded) {
+      handleSearch();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSuppliersLoaded, selectedSupplierId, dateRange, handleSearch]); // handleSearch is memoized
+
+  const grandTotalsAll = useMemo(() => reportDataAll.reduce(
     (acc, curr) => {
       acc.openingDue += curr.openingDue;
       acc.purchasesInPeriod += curr.purchasesInPeriod;
@@ -110,10 +122,21 @@ export default function SupplierDueReportClient() {
       return acc;
     },
     { openingDue: 0, purchasesInPeriod: 0, paymentsInPeriod: 0, closingDue: 0 }
-  );
+  ), [reportDataAll]);
   
-  // Calculate running balance for individual ledger
-  let runningBalance = reportDataIndividual?.openingBalance || 0;
+  const ledgerWithRunningBalance: LedgerTransactionWithBalance[] = useMemo(() => {
+    if (!reportDataIndividual?.transactions || reportDataIndividual.openingBalance === undefined) return [];
+    let currentBalance = reportDataIndividual.openingBalance;
+    return reportDataIndividual.transactions.map(tx => {
+      if (tx.type === 'purchase') {
+        currentBalance += tx.amount;
+      } else { // payment
+        currentBalance -= tx.amount;
+      }
+      return { ...tx, runningBalance: currentBalance };
+    });
+  }, [reportDataIndividual]);
+
 
   return (
     <div className="space-y-6">
@@ -217,7 +240,7 @@ export default function SupplierDueReportClient() {
             <CardTitle className="flex items-center"><FileText className="mr-2 h-5 w-5 text-accent"/>Supplier Ledger: {reportDataIndividual.supplier.name}</CardTitle>
             <CardDescription>
                 Transactions from {dateRange.from ? format(dateRange.from, "MMM dd, yyyy") : 'start of records'} to {dateRange.to ? format(dateRange.to, "MMM dd, yyyy") : 'current date'}.
-                 Opening Balance: <span className="font-semibold">${reportDataIndividual.openingBalance.toFixed(2)}</span>
+                 Opening Balance: <span className="font-semibold">${(reportDataIndividual.openingBalance || 0).toFixed(2)}</span>
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -234,25 +257,18 @@ export default function SupplierDueReportClient() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {reportDataIndividual.transactions.map((tx, index) => {
-                    if (tx.type === 'purchase') {
-                      runningBalance += tx.amount;
-                    } else {
-                      runningBalance -= tx.amount;
-                    }
-                    return (
+                  {ledgerWithRunningBalance.map((tx, index) => (
                       <TableRow key={tx.id}>
                         <TableCell>{index + 1}</TableCell>
-                        <TableCell>{format(parseISO(tx.date), "MMM dd, yyyy")}</TableCell>
+                        <TableCell>{tx.date ? format(parseISO(tx.date), "MMM dd, yyyy") : 'Invalid Date'}</TableCell>
                         <TableCell className="text-xs">{tx.description}</TableCell>
                         <TableCell className="text-right text-blue-600">{tx.type === 'purchase' ? tx.amount.toFixed(2) : '-'}</TableCell>
                         <TableCell className="text-right text-green-600">{tx.type === 'payment' ? tx.amount.toFixed(2) : '-'}</TableCell>
-                        <TableCell className={`text-right font-semibold ${runningBalance < 0 ? 'text-green-700' : (runningBalance > 0 ? 'text-destructive' : 'text-primary')}`}>
-                            {runningBalance.toFixed(2)}
+                        <TableCell className={`text-right font-semibold ${tx.runningBalance < 0 ? 'text-green-700' : (tx.runningBalance > 0 ? 'text-destructive' : 'text-primary')}`}>
+                            {tx.runningBalance.toFixed(2)}
                         </TableCell>
                       </TableRow>
-                    );
-                  })}
+                    ))}
                 </TableBody>
                  <TableFooter className="sticky bottom-0 bg-muted/80 z-10">
                     <TableRow className="font-bold">
@@ -270,7 +286,14 @@ export default function SupplierDueReportClient() {
         </Card>
       )}
       
-      {!isLoading && !error && reportDataAll.length === 0 && !reportDataIndividual && (
+      {!isLoading && !error && !initialSuppliersLoaded && (
+         <div className="flex justify-center py-10 text-muted-foreground">
+            <Loader2 className="mx-auto h-8 w-8 animate-spin mb-4" />
+            <p>Loading initial supplier data...</p>
+        </div>
+      )}
+
+      {!isLoading && !error && initialSuppliersLoaded && reportDataAll.length === 0 && !reportDataIndividual && (
         <div className="text-center py-10 text-muted-foreground">
             <Search className="mx-auto h-12 w-12 mb-4" />
             <p>No supplier due data found for the selected criteria.</p>
@@ -280,3 +303,4 @@ export default function SupplierDueReportClient() {
     </div>
   );
 }
+
