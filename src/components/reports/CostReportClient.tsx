@@ -1,15 +1,16 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { format, subDays } from 'date-fns';
-import { Calendar as CalendarIcon, Search, Loader2, BarChartHorizontalBig, TrendingUp } from 'lucide-react';
-import type { CostEntry } from '@/types';
-import { fetchCostEntriesAction } from '@/app/actions/costActions';
+import { Calendar as CalendarIcon, Search, Loader2, BarChartHorizontalBig, TrendingUp, Filter, Package, Tag } from 'lucide-react';
+import type { CostEntry, CostCategory, PurchaseItem } from '@/types';
+import { fetchCostEntriesAction, fetchCostCategoriesAction, fetchPurchaseItemsAction } from '@/app/actions/costActions';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -24,13 +25,25 @@ interface AggregatedCost {
 
 export default function CostReportClient() {
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({
-    from: subDays(new Date(), 30), // Default to last 30 days
+    from: subDays(new Date(), 30),
     to: new Date(),
   });
   const [costEntries, setCostEntries] = useState<CostEntry[]>([]);
   const [aggregatedCosts, setAggregatedCosts] = useState<AggregatedCost[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [costCategories, setCostCategories] = useState<CostCategory[]>([]);
+  const [purchaseItems, setPurchaseItems] = useState<PurchaseItem[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(''); // '' for All Categories
+  const [selectedPurchaseItemId, setSelectedPurchaseItemId] = useState<string>(''); // '' for All Items
+
+  const filteredPurchaseItems = useMemo(() => {
+    if (!selectedCategoryId) {
+      return purchaseItems; // Show all items if no category is selected
+    }
+    return purchaseItems.filter(item => item.categoryId === selectedCategoryId);
+  }, [purchaseItems, selectedCategoryId]);
 
   const aggregateCostsByCategory = useCallback((entries: CostEntry[]): AggregatedCost[] => {
     const report: { [key: string]: { totalAmount: number; entryCount: number } } = {};
@@ -44,10 +57,33 @@ export default function CostReportClient() {
     return Object.entries(report).map(([categoryName, data]) => ({
       categoryName,
       ...data,
-    })).sort((a,b) => b.totalAmount - a.totalAmount); // Sort by highest cost
+    })).sort((a,b) => b.totalAmount - a.totalAmount);
   }, []);
 
-  const fetchCosts = useCallback(async (currentDateRange: { from?: Date; to?: Date }) => {
+  const loadInitialFiltersData = useCallback(async () => {
+    setIsLoading(true); // Use main loading indicator
+    try {
+      const [categories, items] = await Promise.all([
+        fetchCostCategoriesAction(),
+        fetchPurchaseItemsAction() // Fetch all items initially
+      ]);
+      setCostCategories(categories);
+      setPurchaseItems(items);
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred while loading filters.';
+      setError(errorMessage); // Show error prominently
+      toast({ title: "Error Loading Filters", description: errorMessage, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+
+  const fetchCosts = useCallback(async (
+    currentDateRange: { from?: Date; to?: Date },
+    currentCategoryId: string,
+    currentPurchaseItemId: string
+  ) => {
     if (!currentDateRange.from) {
         toast({ title: "Date Required", description: "Please select a start date for the report.", variant: "destructive"});
         setCostEntries([]);
@@ -63,7 +99,9 @@ export default function CostReportClient() {
     try {
       const fetchedEntries = await fetchCostEntriesAction(
         currentDateRange.from ? format(currentDateRange.from, 'yyyy-MM-dd') : undefined,
-        currentDateRange.to ? format(currentDateRange.to, 'yyyy-MM-dd') : undefined
+        currentDateRange.to ? format(currentDateRange.to, 'yyyy-MM-dd') : undefined,
+        currentCategoryId || undefined, // Pass undefined if empty string
+        currentPurchaseItemId || undefined // Pass undefined if empty string
       );
       setCostEntries(fetchedEntries);
       setAggregatedCosts(aggregateCostsByCategory(fetchedEntries));
@@ -84,9 +122,18 @@ export default function CostReportClient() {
   }, [aggregateCostsByCategory]);
 
   useEffect(() => {
-    fetchCosts(dateRange);
+    loadInitialFiltersData().then(() => {
+        // Fetch initial costs only after filter data is loaded
+        if (dateRange.from) { // Ensure default date range is valid
+             fetchCosts(dateRange, selectedCategoryId, selectedPurchaseItemId);
+        }
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Initial fetch with default date range
+  }, []); // Initial fetch: load filters then costs
+
+  const handleSearch = () => {
+    fetchCosts(dateRange, selectedCategoryId, selectedPurchaseItemId);
+  }
 
   const totalOverallCost = aggregatedCosts.reduce((sum, cat) => sum + cat.totalAmount, 0);
 
@@ -95,55 +142,108 @@ export default function CostReportClient() {
       <Card className="shadow-md">
         <CardHeader>
           <CardTitle className="flex items-center">
-            <TrendingUp className="mr-2 h-5 w-5 text-accent" />
+            <Filter className="mr-2 h-5 w-5 text-accent" />
             Filter Cost Report
           </CardTitle>
-          <CardDescription>Select a date range to view your expenses.</CardDescription>
+          <CardDescription>Select date range, category, and/or specific item for your expense report.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4 sm:space-y-0 sm:flex sm:items-end sm:space-x-4">
-          <div className="grid gap-2 w-full sm:w-auto">
-            <label htmlFor="cost-date-range" className="text-sm font-medium">Date Range</label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  id="cost-date-range"
-                  variant={"outline"}
-                  className={cn(
-                    "w-full sm:w-[260px] justify-start text-left font-normal",
-                    !dateRange.from && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {dateRange.from ? (
-                    dateRange.to ? (
-                      <>
-                        {format(dateRange.from, "LLL dd, y")} -{" "}
-                        {format(dateRange.to, "LLL dd, y")}
-                      </>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+            <div>
+              <label htmlFor="cost-date-range" className="text-sm font-medium block mb-1">Date Range *</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="cost-date-range"
+                    variant={"outline"}
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !dateRange.from && "text-muted-foreground"
+                    )}
+                     disabled={isLoading}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateRange.from ? (
+                      dateRange.to ? (
+                        <>
+                          {format(dateRange.from, "LLL dd, y")} -{" "}
+                          {format(dateRange.to, "LLL dd, y")}
+                        </>
+                      ) : (
+                        format(dateRange.from, "LLL dd, y")
+                      )
                     ) : (
-                      format(dateRange.from, "LLL dd, y")
-                    )
-                  ) : (
-                    <span>Pick a date range</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  initialFocus
-                  mode="range"
-                  defaultMonth={dateRange.from}
-                  selected={dateRange}
-                  onSelect={(newRange) => setDateRange(newRange || {})}
-                  numberOfMonths={2}
-                />
-              </PopoverContent>
-            </Popover>
+                      <span>Pick a date range</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    initialFocus
+                    mode="range"
+                    defaultMonth={dateRange.from}
+                    selected={dateRange}
+                    onSelect={(newRange) => setDateRange(newRange || {})}
+                    numberOfMonths={2}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div>
+              <label htmlFor="cost-category-filter" className="text-sm font-medium block mb-1 flex items-center">
+                <Tag className="mr-1.5 h-4 w-4 text-muted-foreground" /> Cost Category
+              </label>
+              <Select 
+                value={selectedCategoryId} 
+                onValueChange={(value) => {
+                  setSelectedCategoryId(value);
+                  setSelectedPurchaseItemId(''); // Reset item when category changes
+                }}
+                disabled={isLoading || costCategories.length === 0}
+              >
+                <SelectTrigger id="cost-category-filter">
+                  <SelectValue placeholder="Select Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All Categories</SelectItem>
+                  {costCategories.map(cat => (
+                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label htmlFor="purchase-item-filter" className="text-sm font-medium block mb-1 flex items-center">
+                 <Package className="mr-1.5 h-4 w-4 text-muted-foreground" /> Purchase Item
+              </label>
+              <Select 
+                value={selectedPurchaseItemId} 
+                onValueChange={setSelectedPurchaseItemId}
+                disabled={isLoading || filteredPurchaseItems.length === 0}
+              >
+                <SelectTrigger id="purchase-item-filter">
+                  <SelectValue placeholder="Select Item" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">
+                    {selectedCategoryId ? "All Items in Category" : "All Items"}
+                  </SelectItem>
+                  {filteredPurchaseItems.map(item => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.code ? `[${item.code}] ` : ''}{item.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <Button onClick={handleSearch} disabled={isLoading || !dateRange.from} className="w-full lg:w-auto bg-accent hover:bg-accent/90 self-end">
+              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
+              Search Costs
+            </Button>
           </div>
-          <Button onClick={() => fetchCosts(dateRange)} disabled={isLoading || !dateRange.from} className="w-full sm:w-auto bg-accent hover:bg-accent/90">
-            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
-            Search Costs
-          </Button>
         </CardContent>
       </Card>
 
@@ -160,7 +260,7 @@ export default function CostReportClient() {
             <BarChartHorizontalBig className="mr-2 h-6 w-6 text-accent" />
             Category-wise Cost Summary
           </CardTitle>
-          <CardDescription>Total expenses grouped by category for the selected period.</CardDescription>
+          <CardDescription>Total expenses grouped by category for the selected criteria.</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading && aggregatedCosts.length === 0 ? (
@@ -196,16 +296,12 @@ export default function CostReportClient() {
                 </Table>
               </ScrollArea>
               <div className="text-right mt-4">
-                <p className="text-lg font-bold">Overall Total Cost: <span className="text-destructive">${totalOverallCost.toFixed(2)}</span></p>
+                <p className="text-lg font-bold">Overall Total Cost (Filtered): <span className="text-destructive">${totalOverallCost.toFixed(2)}</span></p>
               </div>
             </>
           ) : null }
         </CardContent>
       </Card>
-      
-      {/* Optional: Detailed list of all entries in the period - can be added if needed */}
-      {/* {costEntries.length > 0 && ( ... table for all entries ... )} */}
-
     </div>
   );
 }

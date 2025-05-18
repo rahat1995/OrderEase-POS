@@ -30,7 +30,7 @@ export async function addCostCategoryAction(categoryData: CreateCostCategoryInpu
     };
 
     const docRef = await addDoc(collection(db, 'costCategories'), dataToSave);
-    const newCategory: CostCategory = { name: trimmedName, id: docRef.id }; // nameLower is not part of CostCategory type
+    const newCategory: CostCategory = { name: trimmedName, id: docRef.id };
     return { success: true, category: newCategory };
   } catch (e) {
     console.error('Error adding cost category: ', e);
@@ -45,7 +45,7 @@ export async function fetchCostCategoriesAction(): Promise<CostCategory[]> {
     const querySnapshot = await getDocs(q);
     const categories = querySnapshot.docs.map(doc => ({
       id: doc.id,
-      name: doc.data().name, // Ensure only 'name' is mapped from data
+      name: doc.data().name,
     } as CostCategory));
     return categories;
   } catch (error) {
@@ -74,7 +74,7 @@ export async function addPurchaseItemAction(itemData: CreatePurchaseItemInput): 
 
     // Case-insensitive check for unique code if provided (globally unique for codes)
     if (trimmedCode && trimmedCode.length > 0) {
-      const codeQuery = query(itemsCol, where('code', '==', trimmedCode)); // Direct match, already uppercase
+      const codeQuery = query(itemsCol, where('code', '==', trimmedCode));
       const codeQuerySnapshot = await getDocs(codeQuery);
       if (!codeQuerySnapshot.empty) {
         return { success: false, error: `Purchase item code "${trimmedCode}" already exists.` };
@@ -100,9 +100,11 @@ export async function addPurchaseItemAction(itemData: CreatePurchaseItemInput): 
 export async function fetchPurchaseItemsAction(categoryId?: string): Promise<PurchaseItem[]> {
   try {
     const itemsCol = collection(db, 'purchaseItems');
-    let q = query(itemsCol, orderBy('categoryName'), orderBy('name'));
+    let q;
     if (categoryId) {
       q = query(itemsCol, where('categoryId', '==', categoryId), orderBy('name'));
+    } else {
+      q = query(itemsCol, orderBy('categoryName'), orderBy('name'));
     }
     const querySnapshot = await getDocs(q);
     const items = querySnapshot.docs.map(doc => ({
@@ -119,7 +121,7 @@ export async function fetchPurchaseItemsAction(categoryId?: string): Promise<Pur
 
 // Purchase Bill and associated Cost Entries Action
 export async function addPurchaseBillWithEntriesAction(
-  billData: { // Modified to accept supplierId and supplierName
+  billData: {
     billDate: string; // ISO string
     supplierId?: string;
     supplierName?: string;
@@ -175,8 +177,13 @@ export async function addPurchaseBillWithEntriesAction(
 }
 
 
-// Cost Entry Actions (Fetch only, add is handled by addPurchaseBillWithEntriesAction)
-export async function fetchCostEntriesAction(startDate?: string, endDate?: string): Promise<CostEntry[]> {
+// Cost Entry Actions
+export async function fetchCostEntriesAction(
+  startDate?: string, 
+  endDate?: string,
+  categoryId?: string,
+  purchaseItemId?: string
+): Promise<CostEntry[]> {
   try {
     const entriesCol = collection(db, 'costEntries');
     let q = query(entriesCol, orderBy('date', 'desc'));
@@ -188,6 +195,12 @@ export async function fetchCostEntriesAction(startDate?: string, endDate?: strin
       const endOfDay = new Date(endDate);
       endOfDay.setHours(23, 59, 59, 999);
       q = query(q, where('date', '<=', Timestamp.fromDate(endOfDay)));
+    }
+    if (categoryId) {
+      q = query(q, where('categoryId', '==', categoryId));
+    }
+    if (purchaseItemId) {
+      q = query(q, where('purchaseItemId', '==', purchaseItemId));
     }
 
     const querySnapshot = await getDocs(q);
