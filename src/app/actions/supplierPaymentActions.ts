@@ -2,7 +2,7 @@
 'use server';
 
 import { db } from '@/lib/firebase';
-import { collection, addDoc, getDocs, query, where, Timestamp, orderBy, writeBatch, DocumentData } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, where, Timestamp, orderBy, writeBatch, DocumentData, doc } from 'firebase/firestore';
 import type { Supplier, SupplierPayment, CreateSupplierPaymentInput, PurchaseBill, SupplierBalance, SupplierPeriodicSummary, LedgerTransaction, SupplierLedgerData } from '@/types';
 import { fetchSuppliersAction } from './supplierActions'; 
 import { endOfDay, parseISO, startOfDay } from 'date-fns';
@@ -15,15 +15,15 @@ export async function calculateSupplierBalanceAction(supplierId: string): Promis
   // Calculate total billed amount from purchaseBills
   const billsQuery = query(collection(db, 'purchaseBills'), where('supplierId', '==', supplierId));
   const billsSnapshot = await getDocs(billsQuery);
-  billsSnapshot.forEach(doc => {
-    totalBilled += (doc.data() as PurchaseBill).totalAmount;
+  billsSnapshot.forEach(billDoc => { // Renamed doc to billDoc for clarity
+    totalBilled += (billDoc.data() as PurchaseBill).totalAmount;
   });
 
   // Calculate total paid amount from supplierPayments
   const paymentsQuery = query(collection(db, 'supplierPayments'), where('supplierId', '==', supplierId));
   const paymentsSnapshot = await getDocs(paymentsQuery);
-  paymentsSnapshot.forEach(doc => {
-    totalPaid += (doc.data() as SupplierPayment).amountPaid;
+  paymentsSnapshot.forEach(paymentDoc => { // Renamed doc to paymentDoc
+    totalPaid += (paymentDoc.data() as SupplierPayment).amountPaid;
   });
 
   const currentDue = totalBilled - totalPaid;
@@ -44,10 +44,12 @@ export async function addSupplierPaymentAction(paymentData: CreateSupplierPaymen
     if (paymentData.amountPaid <= 0) {
         return { success: false, error: 'Payment amount must be positive.' };
     }
-    if (balance.currentDue <= 0 && paymentData.amountPaid > 0) { // Allow zero payment if due is zero (though form might prevent)
+    // Allow payment if due is negative (credit balance for supplier), but form might prevent it.
+    // Only block if due is zero and trying to pay.
+    if (balance.currentDue === 0 && paymentData.amountPaid > 0) { 
       return { success: false, error: `Supplier ${supplier.name} has no outstanding due. Cannot record payment.` };
     }
-    if (paymentData.amountPaid > balance.currentDue) {
+    if (paymentData.amountPaid > balance.currentDue && balance.currentDue > 0) { // Only check if currentDue is positive
       return { success: false, error: `Payment amount ($${paymentData.amountPaid.toFixed(2)}) cannot exceed current due ($${balance.currentDue.toFixed(2)}).` };
     }
 
@@ -94,10 +96,10 @@ export async function fetchSupplierPaymentsAction(supplierId?: string, startDate
     q = query(q, orderBy('paymentDate', 'desc'));
     
     const querySnapshot = await getDocs(q);
-    const payments = querySnapshot.docs.map(doc => {
-      const data = doc.data();
+    const payments = querySnapshot.docs.map(paymentDoc => { // Renamed doc to paymentDoc
+      const data = paymentDoc.data();
       return {
-        id: doc.id,
+        id: paymentDoc.id,
         ...data,
         paymentDate: (data.paymentDate as Timestamp).toDate().toISOString(),
         createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
@@ -158,30 +160,47 @@ export async function fetchSupplierPeriodicSummaryAction(
     const paymentsBeforeSnapshot = await getDocs(paymentsBeforeQuery);
     paymentsBeforeSnapshot.forEach(doc => paymentsBeforePeriod += (doc.data() as SupplierPayment).amountPaid);
   } else {
-    // If no start date, opening due is effectively 0 as we consider from the beginning of time
-    billsBeforePeriod = 0;
-    paymentsBeforePeriod = 0;
+    // If no start date, fetch all bills and payments for the supplier to calculate historical opening due
+    const allBillsQuery = query(billsCol, where('supplierId', '==', supplier.id));
+    const allBillsSnapshot = await getDocs(allBillsQuery);
+    allBillsSnapshot.forEach(doc => billsBeforePeriod += (doc.data() as PurchaseBill).totalAmount);
+    
+    const allPaymentsQuery = query(paymentsCol, where('supplierId', '==', supplier.id));
+    const allPaymentsSnapshot = await getDocs(allPaymentsQuery);
+    allPaymentsSnapshot.forEach(doc => paymentsBeforePeriod += (doc.data() as SupplierPayment).amountPaid);
+
+    // If no start date, purchasesInPeriod and paymentsInPeriod effectively become zero
+    // because the "period" hasn't started yet relative to filtering.
+    // The openingDue will be the current total due.
   }
   const openingDue = billsBeforePeriod - paymentsBeforePeriod;
 
-  // Calculate amounts within the period
-  let billsInPeriodQuery = query(billsCol, where('supplierId', '==', supplier.id));
-  let paymentsInPeriodQuery = query(paymentsCol, where('supplierId', '==', supplier.id));
 
-  if (startDateISO) {
-    billsInPeriodQuery = query(billsInPeriodQuery, where('billDate', '>=', Timestamp.fromDate(startOfDay(parseISO(startDateISO)))));
-    paymentsInPeriodQuery = query(paymentsInPeriodQuery, where('paymentDate', '>=', Timestamp.fromDate(startOfDay(parseISO(startDateISO)))));
-  }
-  if (endDateISO) {
-    billsInPeriodQuery = query(billsInPeriodQuery, where('billDate', '<=', Timestamp.fromDate(endOfDay(parseISO(endDateISO)))));
-    paymentsInPeriodQuery = query(paymentsInPeriodQuery, where('paymentDate', '<=', Timestamp.fromDate(endOfDay(parseISO(endDateISO)))));
-  }
-  
-  const billsInPeriodSnapshot = await getDocs(billsInPeriodQuery);
-  billsInPeriodSnapshot.forEach(doc => purchasesInPeriod += (doc.data() as PurchaseBill).totalAmount);
+  // Calculate amounts within the period only if a period is defined
+  if (startDateISO || endDateISO) {
+    let billsInPeriodQuery = query(billsCol, where('supplierId', '==', supplier.id));
+    let paymentsInPeriodQuery = query(paymentsCol, where('supplierId', '==', supplier.id));
 
-  const paymentsInPeriodSnapshot = await getDocs(paymentsInPeriodQuery);
-  paymentsInPeriodSnapshot.forEach(doc => paymentsInPeriod += (doc.data() as SupplierPayment).amountPaid);
+    if (startDateISO) {
+      billsInPeriodQuery = query(billsInPeriodQuery, where('billDate', '>=', Timestamp.fromDate(startOfDay(parseISO(startDateISO)))));
+      paymentsInPeriodQuery = query(paymentsInPeriodQuery, where('paymentDate', '>=', Timestamp.fromDate(startOfDay(parseISO(startDateISO)))));
+    }
+    if (endDateISO) {
+      billsInPeriodQuery = query(billsInPeriodQuery, where('billDate', '<=', Timestamp.fromDate(endOfDay(parseISO(endDateISO)))));
+      paymentsInPeriodQuery = query(paymentsInPeriodQuery, where('paymentDate', '<=', Timestamp.fromDate(endOfDay(parseISO(endDateISO)))));
+    }
+    
+    const billsInPeriodSnapshot = await getDocs(billsInPeriodQuery);
+    billsInPeriodSnapshot.forEach(doc => purchasesInPeriod += (doc.data() as PurchaseBill).totalAmount);
+
+    const paymentsInPeriodSnapshot = await getDocs(paymentsInPeriodQuery);
+    paymentsInPeriodSnapshot.forEach(doc => paymentsInPeriod += (doc.data() as SupplierPayment).amountPaid);
+  } else {
+    // If no period is defined, there are no "in-period" transactions
+    purchasesInPeriod = 0;
+    paymentsInPeriod = 0;
+  }
+
 
   const closingDue = openingDue + purchasesInPeriod - paymentsInPeriod;
 
@@ -219,6 +238,15 @@ export async function fetchSupplierLedgerDataAction(
     const paymentsBeforeQuery = query(paymentsCol, where('supplierId', '==', supplierId), where('paymentDate', '<', startTimestamp));
     const paymentsBeforeSnapshot = await getDocs(paymentsBeforeQuery);
     paymentsBeforeSnapshot.forEach(doc => paymentsBeforePeriod += (doc.data() as SupplierPayment).amountPaid);
+  } else {
+    // If no start date, opening balance is the all-time balance before any "period" filtering
+    const allBillsQuery = query(billsCol, where('supplierId', '==', supplierId));
+    const allBillsSnapshot = await getDocs(allBillsQuery);
+    allBillsSnapshot.forEach(doc => billsBeforePeriod += (doc.data().totalAmount as number));
+
+    const allPaymentsQuery = query(paymentsCol, where('supplierId', '==', supplierId));
+    const allPaymentsSnapshot = await getDocs(allPaymentsQuery);
+    allPaymentsSnapshot.forEach(doc => paymentsBeforePeriod += (doc.data().amountPaid as number));
   }
   const openingBalance = billsBeforePeriod - paymentsBeforePeriod;
 
@@ -233,16 +261,15 @@ export async function fetchSupplierLedgerDataAction(
   
   const billsInPeriodSnapshot = await getDocs(billsInPeriodQuery);
   billsInPeriodSnapshot.forEach(doc => {
-    const bill = doc.data() as PurchaseBill & { id: string }; // Cast to include id
-    bill.id = doc.id; // Ensure id is set
+    const billData = doc.data();
     transactions.push({
-      id: bill.id,
-      date: bill.billDate,
+      id: doc.id,
+      date: (billData.billDate as Timestamp).toDate().toISOString(), // Convert Timestamp to ISO string
       type: 'purchase',
-      description: `Bill #${bill.billNumber || bill.id.substring(0,6)} (PO: ${bill.purchaseOrderNumber || 'N/A'})`,
-      amount: bill.totalAmount,
+      description: `Bill #${billData.billNumber || doc.id.substring(0,6)} (PO: ${billData.purchaseOrderNumber || 'N/A'})`,
+      amount: billData.totalAmount as number,
     });
-    totalPurchasesInPeriod += bill.totalAmount;
+    totalPurchasesInPeriod += billData.totalAmount as number;
   });
 
   // Fetch payments in period
@@ -252,16 +279,15 @@ export async function fetchSupplierLedgerDataAction(
   
   const paymentsInPeriodSnapshot = await getDocs(paymentsInPeriodQuery);
   paymentsInPeriodSnapshot.forEach(doc => {
-    const payment = doc.data() as SupplierPayment & { id: string }; // Cast
-    payment.id = doc.id; // Ensure id
+    const paymentData = doc.data();
     transactions.push({
-      id: payment.id,
-      date: payment.paymentDate,
+      id: doc.id,
+      date: (paymentData.paymentDate as Timestamp).toDate().toISOString(), // Already converted in fetchSupplierPaymentsAction if used, but direct fetch needs it
       type: 'payment',
-      description: `Payment via ${payment.paymentMethod}${payment.notes ? ` (${payment.notes.substring(0,30)}...)` : ''}`,
-      amount: payment.amountPaid,
+      description: `Payment via ${paymentData.paymentMethod}${paymentData.notes ? ` (${(paymentData.notes as string).substring(0,30)}...)` : ''}`,
+      amount: paymentData.amountPaid as number,
     });
-    totalPaymentsInPeriod += payment.amountPaid;
+    totalPaymentsInPeriod += paymentData.amountPaid as number;
   });
 
   transactions.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -277,3 +303,6 @@ export async function fetchSupplierLedgerDataAction(
     closingBalance
   };
 }
+
+
+    
