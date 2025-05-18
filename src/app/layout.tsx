@@ -6,7 +6,7 @@ import './globals.css';
 import { OrderProvider } from '@/contexts/OrderContext';
 import { Toaster } from '@/components/ui/toaster';
 import { Button } from '@/components/ui/button';
-import { Home, FileText, ListPlus, Landmark, TrendingUp, CreditCard, Users, BarChart3, Scale } from 'lucide-react';
+import { Home, FileText, ListPlus, Landmark, TrendingUp, CreditCard, Users, BarChart3, Scale, ShoppingCart, Settings, PieChart } from 'lucide-react';
 
 
 const geistSans = Geist({
@@ -37,14 +37,34 @@ export default function RootLayout({
                 </a>
               </Link>
               <div className="space-x-1 flex-wrap">
+                {/* Sales Management */}
                 <Button asChild variant="ghost" size="sm">
                   <Link href="/">
-                    <Home className="mr-1.5 h-4 w-4" /> POS
+                    <ShoppingCart className="mr-1.5 h-4 w-4" /> POS
                   </Link>
                 </Button>
                 <Button asChild variant="ghost" size="sm">
+                  <Link href="/admin/menu">
+                    <ListPlus className="mr-1.5 h-4 w-4" /> Menu Mgt.
+                  </Link>
+                </Button>
+
+                {/* Purchase/Cost Management */}
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/admin/costing">
+                    <Landmark className="mr-1.5 h-4 w-4" /> Cost Mgt.
+                  </Link>
+                </Button>
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/admin/supplier-payments">
+                    <CreditCard className="mr-1.5 h-4 w-4" /> Supplier Payments
+                  </Link>
+                </Button>
+                
+                {/* Reports */}
+                <Button asChild variant="ghost" size="sm">
                   <Link href="/reports/sales">
-                    <FileText className="mr-1.5 h-4 w-4" /> Sales Report
+                    <BarChart3 className="mr-1.5 h-4 w-4" /> Sales Report
                   </Link>
                 </Button>
                  <Button asChild variant="ghost" size="sm">
@@ -59,22 +79,7 @@ export default function RootLayout({
                 </Button>
                 <Button asChild variant="ghost" size="sm">
                   <Link href="/reports/profit-loss">
-                    <Scale className="mr-1.5 h-4 w-4" /> Profit & Loss
-                  </Link>
-                </Button>
-                <Button asChild variant="ghost" size="sm">
-                  <Link href="/admin/menu">
-                    <ListPlus className="mr-1.5 h-4 w-4" /> Menu Mgt.
-                  </Link>
-                </Button>
-                <Button asChild variant="ghost" size="sm">
-                  <Link href="/admin/costing">
-                    <Landmark className="mr-1.5 h-4 w-4" /> Cost Mgt.
-                  </Link>
-                </Button>
-                <Button asChild variant="ghost" size="sm">
-                  <Link href="/admin/supplier-payments">
-                    <CreditCard className="mr-1.5 h-4 w-4" /> Supplier Payments
+                    <PieChart className="mr-1.5 h-4 w-4" /> Profit & Loss
                   </Link>
                 </Button>
               </div>
@@ -88,3 +93,5 @@ export default function RootLayout({
       </body>
     </html>
   );
+
+}
