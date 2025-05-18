@@ -32,7 +32,7 @@ type PaymentFormData = z.infer<typeof paymentFormSchema>;
 interface SupplierPaymentFormProps {
   supplierBalance: SupplierBalance;
   onPaymentAdded: () => void; // Callback to refresh parent list or close dialog
-  onCancel: ()_VOID;
+  onCancel: () => void;
 }
 
 export default function SupplierPaymentForm({ supplierBalance, onPaymentAdded, onCancel }: SupplierPaymentFormProps) {
