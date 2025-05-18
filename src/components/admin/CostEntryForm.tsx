@@ -7,7 +7,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from 'date-fns';
 import type { CostCategory, CreateCostEntryInput } from '@/types';
-import { addCostEntryAction } from '@/app/actions/costActions';
+// This action is likely being replaced by addPurchaseBillWithEntriesAction
+// import { addCostEntryAction } from '@/app/actions/costActions'; 
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,10 +21,16 @@ import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Loader2, PlusCircle, CalendarIcon, Landmark } from 'lucide-react';
 
+// THIS COMPONENT IS LIKELY OBSOLETE due to the new PurchaseBillForm.
+// It's kept here for reference or if a simple, single cost entry is ever needed again.
+// Consider removing it if PurchaseBillForm fully replaces its functionality.
+
 const costEntrySchema = z.object({
   date: z.date({ required_error: "Cost date is required." }),
   categoryId: z.string().min(1, { message: "Please select a category." }),
-  itemName: z.string().min(2, { message: "Item name must be at least 2 characters." }).max(100, { message: "Item name must be at most 100 characters." }),
+  // itemName: z.string().min(2, { message: "Item name must be at least 2 characters." }).max(100, { message: "Item name must be at most 100 characters." }),
+  // Replacing itemName with purchaseItemId and purchaseItemName from the new flow
+  purchaseItemId: z.string().min(1, "Please select a purchase item."),
   amount: z.coerce.number().positive({ message: "Amount must be a positive number." }),
 });
 
@@ -42,50 +49,60 @@ export default function CostEntryForm({ categories, onCostEntryAdded }: CostEntr
     defaultValues: {
       date: new Date(),
       categoryId: '',
-      itemName: '',
+      // itemName: '',
+      purchaseItemId: '',
       amount: 0,
     },
   });
 
   const onSubmit: SubmitHandler<CostEntryFormData> = async (data) => {
     setIsSubmitting(true);
-    const selectedCategory = categories.find(cat => cat.id === data.categoryId);
-    if (!selectedCategory) {
-      toast({ title: "Error", description: "Selected category not found.", variant: "destructive" });
-      setIsSubmitting(false);
-      return;
-    }
+    // This logic would need to be updated significantly if this form is reused.
+    // It currently doesn't align with the new PurchaseItem and PurchaseBill flow.
+    toast({ title: "Form Obsolete", description: "This form is not used in the current bill-based costing flow.", variant: "destructive" });
+    setIsSubmitting(false);
+    return;
 
-    const entryData: CreateCostEntryInput = {
-      ...data,
-      categoryName: selectedCategory.name,
-      date: data.date.toISOString(), // Send as ISO string
-    };
 
-    try {
-      const result = await addCostEntryAction(entryData);
-      if (result.success && result.entry) {
-        toast({ title: "Cost Entry Added", description: `Entry "${result.entry.itemName}" for $${result.entry.amount.toFixed(2)} added.` });
-        form.reset({ date: new Date(), categoryId: '', itemName: '', amount: 0 }); // Reset form
-        onCostEntryAdded(result.entry);
-      } else {
-        throw new Error(result.error || "Failed to add cost entry.");
-      }
-    } catch (error) {
-      toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
-    } finally {
-      setIsSubmitting(false);
-    }
+    // const selectedCategory = categories.find(cat => cat.id === data.categoryId);
+    // if (!selectedCategory) {
+    //   toast({ title: "Error", description: "Selected category not found.", variant: "destructive" });
+    //   setIsSubmitting(false);
+    //   return;
+    // }
+
+    // const entryData: CreateCostEntryInput = {
+    //   ...data, // This spread needs to be carefully considered with new types
+    //   categoryName: selectedCategory.name, // This would come from PurchaseItem now
+    //   purchaseItemName: "N/A (Old Form)", // Placeholder
+    //   purchaseBillId: "N/A (Old Form)", // Placeholder
+    //   date: data.date.toISOString(), // Send as ISO string
+    // };
+
+    // try {
+    //   // const result = await addCostEntryAction(entryData); // OLD ACTION
+    //   // if (result.success && result.entry) {
+    //   //   toast({ title: "Cost Entry Added", description: `Entry "${result.entry.purchaseItemName}" for $${result.entry.amount.toFixed(2)} added.` });
+    //   //   form.reset({ date: new Date(), categoryId: '', purchaseItemId: '', amount: 0 }); // Reset form
+    //   //   onCostEntryAdded(result.entry);
+    //   // } else {
+    //   //   throw new Error(result.error || "Failed to add cost entry.");
+    //   // }
+    // } catch (error) {
+    //   toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
+    // } finally {
+    //   setIsSubmitting(false);
+    // }
   };
 
   return (
-    <Card className="shadow-lg">
+    <Card className="shadow-lg hidden"> {/* Hidden by default as it's likely obsolete */}
       <CardHeader>
          <div className="flex items-center space-x-2">
           <Landmark className="h-6 w-6 text-accent" />
-          <CardTitle>Add New Cost Entry</CardTitle>
+          <CardTitle>Add New Cost Entry (Legacy)</CardTitle>
         </div>
-        <CardDescription>Record your business expenses here.</CardDescription>
+        <CardDescription>This form is for single cost entries and may be obsolete.</CardDescription>
       </CardHeader>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -153,14 +170,15 @@ export default function CostEntryForm({ categories, onCostEntryAdded }: CostEntr
               )}
             />
 
+            {/* This would need to change to select a PurchaseItem */}
             <FormField
               control={form.control}
-              name="itemName"
+              name="purchaseItemId" 
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Item Name / Description</FormLabel>
+                  <FormLabel>Purchase Item (Legacy - Needs Update)</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Monthly Electricity Bill" {...field} disabled={isSubmitting} />
+                    <Input placeholder="Select or type item (Legacy)" {...field} disabled={isSubmitting} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -184,7 +202,7 @@ export default function CostEntryForm({ categories, onCostEntryAdded }: CostEntr
           <CardFooter>
             <Button type="submit" disabled={isSubmitting || !form.formState.isValid} className="w-full bg-accent hover:bg-accent/90">
               {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
-              Add Cost Entry
+              Add Cost Entry (Legacy)
             </Button>
           </CardFooter>
         </form>
