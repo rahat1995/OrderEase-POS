@@ -23,6 +23,9 @@ interface AggregatedCost {
   entryCount: number;
 }
 
+const ALL_CATEGORIES_VALUE = "_ALL_CATEGORIES_";
+const ALL_ITEMS_VALUE = "_ALL_ITEMS_";
+
 export default function CostReportClient() {
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({
     from: subDays(new Date(), 30),
@@ -100,8 +103,8 @@ export default function CostReportClient() {
       const fetchedEntries = await fetchCostEntriesAction(
         currentDateRange.from ? format(currentDateRange.from, 'yyyy-MM-dd') : undefined,
         currentDateRange.to ? format(currentDateRange.to, 'yyyy-MM-dd') : undefined,
-        currentCategoryId || undefined, // Pass undefined if empty string
-        currentPurchaseItemId || undefined // Pass undefined if empty string
+        currentCategoryId || undefined, // Pass undefined if empty string (meaning "all")
+        currentPurchaseItemId || undefined // Pass undefined if empty string (meaning "all")
       );
       setCostEntries(fetchedEntries);
       setAggregatedCosts(aggregateCostsByCategory(fetchedEntries));
@@ -194,10 +197,10 @@ export default function CostReportClient() {
               <label htmlFor="cost-category-filter" className="text-sm font-medium block mb-1 flex items-center">
                 <Tag className="mr-1.5 h-4 w-4 text-muted-foreground" /> Cost Category
               </label>
-              <Select 
-                value={selectedCategoryId} 
+              <Select
+                value={selectedCategoryId}
                 onValueChange={(value) => {
-                  setSelectedCategoryId(value);
+                  setSelectedCategoryId(value === ALL_CATEGORIES_VALUE ? "" : value);
                   setSelectedPurchaseItemId(''); // Reset item when category changes
                 }}
                 disabled={isLoading || costCategories.length === 0}
@@ -206,7 +209,7 @@ export default function CostReportClient() {
                   <SelectValue placeholder="Select Category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Categories</SelectItem>
+                  <SelectItem value={ALL_CATEGORIES_VALUE}>All Categories</SelectItem>
                   {costCategories.map(cat => (
                     <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
                   ))}
@@ -218,16 +221,18 @@ export default function CostReportClient() {
               <label htmlFor="purchase-item-filter" className="text-sm font-medium block mb-1 flex items-center">
                  <Package className="mr-1.5 h-4 w-4 text-muted-foreground" /> Purchase Item
               </label>
-              <Select 
-                value={selectedPurchaseItemId} 
-                onValueChange={setSelectedPurchaseItemId}
+              <Select
+                value={selectedPurchaseItemId}
+                onValueChange={(value) => {
+                  setSelectedPurchaseItemId(value === ALL_ITEMS_VALUE ? "" : value);
+                }}
                 disabled={isLoading || filteredPurchaseItems.length === 0}
               >
                 <SelectTrigger id="purchase-item-filter">
                   <SelectValue placeholder="Select Item" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">
+                  <SelectItem value={ALL_ITEMS_VALUE}>
                     {selectedCategoryId ? "All Items in Category" : "All Items"}
                   </SelectItem>
                   {filteredPurchaseItems.map(item => (
@@ -305,3 +310,4 @@ export default function CostReportClient() {
     </div>
   );
 }
+
