@@ -110,8 +110,11 @@ export default function SalesReportClient() {
 
   useEffect(() => {
     // Fetch on initial load with default date range and no customer filters
-    fetchOrders(dateRange, customerNameQuery, customerMobileQuery);
-  }, []); // Empty dependency array to run only on mount
+    if (dateRange) { // Ensure dateRange is initialized
+        fetchOrders(dateRange, customerNameQuery, customerMobileQuery);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty dependency array to run only on mount, ESLint directive to bypass missing deps for initial load logic
 
   const handleSearch = () => {
     fetchOrders(dateRange, customerNameQuery, customerMobileQuery);
@@ -168,7 +171,7 @@ export default function SalesReportClient() {
                         mode="range"
                         defaultMonth={dateRange?.from}
                         selected={dateRange}
-                        onSelect={setDateRange}
+                        onSelect={(newRange) => setDateRange(newRange || {})}
                         numberOfMonths={2}
                     />
                     </PopoverContent>
