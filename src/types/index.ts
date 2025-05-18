@@ -100,3 +100,30 @@ export interface SupplierBalance extends Supplier {
   totalPaid: number;
   currentDue: number;
 }
+
+// For Supplier Due Report - All Suppliers View
+export interface SupplierPeriodicSummary extends Supplier {
+  openingDue: number;
+  purchasesInPeriod: number;
+  paymentsInPeriod: number;
+  closingDue: number;
+}
+
+// For Supplier Due Report - Individual Ledger View
+export interface LedgerTransaction {
+  id: string;
+  date: string; // ISO string
+  type: 'purchase' | 'payment';
+  description: string;
+  amount: number; // Positive for purchase, positive for payment (sign handled by type)
+  // runningBalance will be calculated on client
+}
+
+export interface SupplierLedgerData {
+  supplier: Supplier;
+  openingBalance: number;
+  transactions: LedgerTransaction[];
+  totalPurchasesInPeriod: number;
+  totalPaymentsInPeriod: number;
+  closingBalance: number; // This will be the last runningBalance
+}
