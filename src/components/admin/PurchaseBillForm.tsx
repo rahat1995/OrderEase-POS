@@ -6,12 +6,12 @@ import { useForm, useFieldArray, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from 'date-fns';
-import type { CostCategory, PurchaseItem, PurchaseBill, CostEntry } from '@/types';
+import type { CostCategory, PurchaseItem, PurchaseBill, CostEntry, Supplier } from '@/types';
 import { addPurchaseBillWithEntriesAction } from '@/app/actions/costActions';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+// import { Textarea } from '@/components/ui/textarea'; // No longer needed for supplier address
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -20,25 +20,23 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { Loader2, PlusCircle, CalendarIcon, ReceiptText, PackagePlus, Trash2, FileText } from 'lucide-react';
+import { Loader2, PlusCircle, CalendarIcon, ReceiptText, PackagePlus, Trash2, FileText, Users } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 const costEntryItemSchema = z.object({
   purchaseItemId: z.string().min(1, "Purchase item is required."),
-  purchaseItemName: z.string(), 
+  purchaseItemName: z.string(),
   purchaseItemCode: z.string().optional(),
-  categoryId: z.string(), 
-  categoryName: z.string(), 
+  categoryId: z.string(),
+  categoryName: z.string(),
   amount: z.coerce.number().positive({ message: "Amount must be positive." }),
 });
 
 const purchaseBillFormSchema = z.object({
   billDate: z.date({ required_error: "Bill date is required." }),
-  supplierName: z.string().max(100).optional(),
+  supplierId: z.string().optional(), // Made optional, can create bill without supplier
   billNumber: z.string().max(50).optional(),
   purchaseOrderNumber: z.string().max(50).optional(),
-  supplierAddress: z.string().max(200).optional(),
-  supplierMobile: z.string().max(20).optional(),
   items: z.array(costEntryItemSchema).min(1, { message: "Please add at least one item to the bill." }),
 });
 
@@ -47,27 +45,23 @@ type PurchaseBillFormData = z.infer<typeof purchaseBillFormSchema>;
 interface PurchaseBillFormProps {
   costCategories: CostCategory[];
   purchaseItems: PurchaseItem[];
-  onBillAdded: (bill: PurchaseBill, entries: CostEntry[]) => void; 
+  suppliers: Supplier[];
+  onBillAdded: (bill: PurchaseBill, entries: CostEntry[]) => void;
 }
 
-export default function PurchaseBillForm({ costCategories, purchaseItems, onBillAdded }: PurchaseBillFormProps) {
+export default function PurchaseBillForm({ costCategories, purchaseItems, suppliers, onBillAdded }: PurchaseBillFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
-  
   const [currentItemId, setCurrentItemId] = useState('');
-  // currentItemName, currentItemCategoryName, currentItemCategoryId, currentItemCode are now derived from selectedPurchaseItem
   const [currentItemAmount, setCurrentItemAmount] = useState('');
-
 
   const form = useForm<PurchaseBillFormData>({
     resolver: zodResolver(purchaseBillFormSchema),
     defaultValues: {
       billDate: new Date(),
-      supplierName: '',
+      supplierId: '',
       billNumber: '',
       purchaseOrderNumber: '',
-      supplierAddress: '',
-      supplierMobile: '',
       items: [],
     },
   });
@@ -95,7 +89,7 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, onBill
        toast({ title: "Item not found", description: "Selected purchase item is invalid.", variant: "destructive" });
       return;
     }
-    
+
     append({
       purchaseItemId: selectedPurchaseItem.id,
       purchaseItemName: selectedPurchaseItem.name,
@@ -105,25 +99,26 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, onBill
       amount: amount,
     });
 
-    setSelectedCategoryId(''); 
-    setCurrentItemId('');
+    // Reset item selection part
+    setSelectedCategoryId('');
+    setCurrentItemId(''); // This should also reset the Select component if keyed properly or value bound to it.
     setCurrentItemAmount('');
-    // Reset the Select component for purchase items by forcing a re-render if needed (e.g. by changing a key on it)
-    // Or by ensuring form.setValue('currentItemId', '') etc. if it were a form field.
+    // form.setValue('currentItemIdField', ''); // If currentItemId was a direct form field.
   };
-  
+
   const onSubmit: SubmitHandler<PurchaseBillFormData> = async (data) => {
     setIsSubmitting(true);
 
+    const selectedSupplier = suppliers.find(s => s.id === data.supplierId);
+
     const billDetails = {
       billDate: data.billDate.toISOString(),
-      supplierName: data.supplierName || undefined,
+      supplierId: selectedSupplier?.id || undefined,
+      supplierName: selectedSupplier?.name || undefined,
       billNumber: data.billNumber || undefined,
       purchaseOrderNumber: data.purchaseOrderNumber || undefined,
-      supplierAddress: data.supplierAddress || undefined,
-      supplierMobile: data.supplierMobile || undefined,
     };
-    
+
     const itemsForAction = data.items.map(item => ({
       purchaseItemId: item.purchaseItemId,
       purchaseItemName: item.purchaseItemName,
@@ -133,18 +128,15 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, onBill
       categoryName: item.categoryName,
     }));
 
-
     try {
       const result = await addPurchaseBillWithEntriesAction(billDetails, itemsForAction);
       if (result.success && result.purchaseBill && result.costEntries) {
         toast({ title: "Purchase Bill Added", description: `Bill with ${result.costEntries.length} items saved.` });
         form.reset({
           billDate: new Date(),
-          supplierName: '',
+          supplierId: '',
           billNumber: '',
           purchaseOrderNumber: '',
-          supplierAddress: '',
-          supplierMobile: '',
           items: [],
         });
         setSelectedCategoryId('');
@@ -155,7 +147,7 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, onBill
         throw new Error(result.error || "Failed to add purchase bill.");
       }
     } catch (error) {
-      toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
+      toast({ title: "Error Adding Bill", description: (error as Error).message, variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
@@ -168,12 +160,12 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, onBill
           <ReceiptText className="h-7 w-7 text-accent" />
           <CardTitle className="text-xl">Enter New Purchase Bill</CardTitle>
         </div>
-        <CardDescription>Record supplier bills and their individual item costs.</CardDescription>
+        <CardDescription>Record supplier bills and their individual item costs. Select a supplier or leave blank for direct expenses.</CardDescription>
       </CardHeader>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
           <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="billDate"
@@ -201,11 +193,25 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, onBill
                   </FormItem>
                 )}
               />
-              <FormField control={form.control} name="supplierName" render={({ field }) => (<FormItem><FormLabel>Supplier Name</FormLabel><FormControl><Input placeholder="Optional" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>)} />
+               <FormField
+                control={form.control}
+                name="supplierId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center"><Users className="mr-1.5 h-4 w-4 text-muted-foreground"/>Supplier (Optional)</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value} disabled={isSubmitting || suppliers.length === 0}>
+                      <FormControl><SelectTrigger><SelectValue placeholder="Select a supplier" /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        <SelectItem value="">No Supplier (Direct Expense)</SelectItem>
+                        {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <FormField control={form.control} name="billNumber" render={({ field }) => (<FormItem><FormLabel>Bill/Invoice Number</FormLabel><FormControl><Input placeholder="Optional" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>)} />
               <FormField control={form.control} name="purchaseOrderNumber" render={({ field }) => (<FormItem><FormLabel>PO Number</FormLabel><FormControl><Input placeholder="Optional" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>)} />
-              <FormField control={form.control} name="supplierMobile" render={({ field }) => (<FormItem><FormLabel>Supplier Mobile</FormLabel><FormControl><Input placeholder="Optional" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>)} />
-              <FormField control={form.control} name="supplierAddress" render={({ field }) => (<FormItem className="md:col-span-3"><FormLabel>Supplier Address</FormLabel><FormControl><Textarea placeholder="Optional" {...field} disabled={isSubmitting} rows={2} /></FormControl><FormMessage /></FormItem>)} />
             </div>
 
             <Card className="pt-4 border-dashed">
@@ -225,10 +231,10 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, onBill
                     </FormItem>
                     <FormItem>
                       <FormLabel>Purchase Item *</FormLabel>
-                      <Select 
-                        key={selectedCategoryId} // Force re-render if category changes to ensure value is reset
-                        onValueChange={(value) => setCurrentItemId(value)} 
-                        value={currentItemId} 
+                      <Select
+                        key={`item-select-${selectedCategoryId}`} // Re-key to reset when category changes
+                        onValueChange={(value) => setCurrentItemId(value)}
+                        value={currentItemId}
                         disabled={isSubmitting || !selectedCategoryId || filteredPurchaseItems.length === 0}
                       >
                         <FormControl><SelectTrigger><SelectValue placeholder="Select Item" /></SelectTrigger></FormControl>
@@ -236,7 +242,7 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, onBill
                           {filteredPurchaseItems.length === 0 && <SelectItem value="-" disabled>{selectedCategoryId ? "No items in category" : "Select category first"}</SelectItem>}
                           {filteredPurchaseItems.map(item => (
                             <SelectItem key={item.id} value={item.id}>
-                              {item.code ? `${item.code} - ` : ''}{item.name}
+                              {item.code ? `[${item.code}] ` : ''}{item.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -252,7 +258,7 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, onBill
                  </div>
               </CardContent>
             </Card>
-            
+
             {fields.length > 0 && (
               <div className="mt-4">
                 <h4 className="text-md font-medium mb-2 flex items-center"><FileText className="mr-2 h-5 w-5 text-primary"/>Items in Current Bill</h4>
@@ -283,7 +289,7 @@ export default function PurchaseBillForm({ costCategories, purchaseItems, onBill
              <FormField
                 control={form.control}
                 name="items"
-                render={() => <FormMessage />} 
+                render={() => <FormMessage />}
               />
           </CardContent>
           <CardFooter>

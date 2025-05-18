@@ -5,39 +5,45 @@ import React, { useState, useEffect, useCallback } from 'react';
 import CostCategoryForm from '@/components/admin/CostCategoryForm';
 import PurchaseItemForm from '@/components/admin/PurchaseItemForm';
 import PurchaseBillForm from '@/components/admin/PurchaseBillForm';
-import type { CostCategory, CostEntry, PurchaseItem, PurchaseBill } from '@/types';
+import SupplierForm from '@/components/admin/SupplierForm'; // New import
+import type { CostCategory, CostEntry, PurchaseItem, PurchaseBill, Supplier } from '@/types'; // Added Supplier
 import { fetchCostCategoriesAction, fetchPurchaseItemsAction, fetchCostEntriesAction } from '@/app/actions/costActions';
+import { fetchSuppliersAction } from '@/app/actions/supplierActions'; // New import
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from '@/hooks/use-toast';
-import { DollarSign, ListOrdered, Loader2, Package, ReceiptText, Banknote } from 'lucide-react';
+import { DollarSign, ListOrdered, Loader2, Package, ReceiptText, Banknote, Users } from 'lucide-react';
 import { format } from 'date-fns';
-
 
 export default function CostingManagementPage() {
   const [costCategories, setCostCategories] = useState<CostCategory[]>([]);
   const [purchaseItems, setPurchaseItems] = useState<PurchaseItem[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]); // New state for suppliers
   const [recentCostEntries, setRecentCostEntries] = useState<CostEntry[]>([]);
-  
+
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
   const [isLoadingPurchaseItems, setIsLoadingPurchaseItems] = useState(true);
+  const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(true); // New loading state
   const [isLoadingEntries, setIsLoadingEntries] = useState(true);
 
   const loadInitialData = useCallback(async () => {
     setIsLoadingCategories(true);
     setIsLoadingPurchaseItems(true);
+    setIsLoadingSuppliers(true);
     setIsLoadingEntries(true);
     try {
-      const [categories, items, entries] = await Promise.all([
+      const [categories, items, fetchedSuppliers, entries] = await Promise.all([
         fetchCostCategoriesAction(),
         fetchPurchaseItemsAction(),
-        fetchCostEntriesAction(undefined, undefined) 
+        fetchSuppliersAction(), // Fetch suppliers
+        fetchCostEntriesAction(undefined, undefined)
       ]);
-      
+
       setCostCategories(categories.sort((a, b) => a.name.localeCompare(b.name)));
       setPurchaseItems(items.sort((a, b) => (a.code || '').localeCompare(b.code || '') || a.name.localeCompare(b.name)));
-      
+      setSuppliers(fetchedSuppliers.sort((a,b) => a.name.localeCompare(b.name))); // Set suppliers
+
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       const recent = entries
@@ -51,6 +57,7 @@ export default function CostingManagementPage() {
     } finally {
       setIsLoadingCategories(false);
       setIsLoadingPurchaseItems(false);
+      setIsLoadingSuppliers(false);
       setIsLoadingEntries(false);
     }
   }, []);
@@ -66,13 +73,19 @@ export default function CostingManagementPage() {
   const handlePurchaseItemAdded = (newItem: PurchaseItem) => {
     setPurchaseItems(prev => [...prev, newItem].sort((a,b) => (a.code || '').localeCompare(b.code || '') || a.name.localeCompare(b.name)));
   };
-  
+
+  const handleSupplierAdded = (newSupplier: Supplier) => { // New handler
+    setSuppliers(prev => [...prev, newSupplier].sort((a,b) => a.name.localeCompare(b.name)));
+  };
+
   const handlePurchaseBillAdded = (_newBill: PurchaseBill, newEntries: CostEntry[]) => {
-    setRecentCostEntries(prev => 
+    setRecentCostEntries(prev =>
         [...newEntries, ...prev]
         .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-        .slice(0,10) 
+        .slice(0,10)
     );
+    // Optionally re-fetch purchase items if bill addition could affect stock or item data indirectly
+    // fetchPurchaseItemsAction().then(items => setPurchaseItems(items.sort((a,b) => (a.code || '').localeCompare(b.code || '') || a.name.localeCompare(b.name))));
   };
 
 
@@ -80,30 +93,35 @@ export default function CostingManagementPage() {
     <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-8">
       <CardHeader className="p-0 mb-6">
         <div className="flex items-center space-x-3">
-          <Banknote className="h-8 w-8 text-accent" /> 
+          <Banknote className="h-8 w-8 text-accent" />
           <div>
             <CardTitle className="text-2xl md:text-3xl">Cost & Purchase Management</CardTitle>
-            <CardDescription>Manage expense categories, purchase items, and record supplier bills.</CardDescription>
+            <CardDescription>Manage suppliers, expense categories, purchase items, and record supplier bills.</CardDescription>
           </div>
         </div>
       </CardHeader>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         <div className="lg:col-span-1 space-y-6">
-          <CostCategoryForm 
-            onCategoryAdded={handleCategoryAdded} 
-            initialCategories={costCategories} 
+          <SupplierForm
+            onSupplierAdded={handleSupplierAdded}
+            initialSuppliers={suppliers}
           />
-          <PurchaseItemForm 
-            costCategories={costCategories} 
+          <CostCategoryForm
+            onCategoryAdded={handleCategoryAdded}
+            initialCategories={costCategories}
+          />
+          <PurchaseItemForm
+            costCategories={costCategories}
             onPurchaseItemAdded={handlePurchaseItemAdded}
             initialPurchaseItems={purchaseItems}
           />
         </div>
         <div className="lg:col-span-2">
-           <PurchaseBillForm 
+           <PurchaseBillForm
             costCategories={costCategories}
             purchaseItems={purchaseItems}
+            suppliers={suppliers} // Pass suppliers
             onBillAdded={handlePurchaseBillAdded}
           />
         </div>

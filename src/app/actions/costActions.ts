@@ -3,11 +3,12 @@
 
 import { db } from '@/lib/firebase';
 import { collection, addDoc, getDocs, query, orderBy, Timestamp, where, writeBatch, doc } from 'firebase/firestore';
-import type { 
-  CostCategory, CreateCostCategoryInput, 
+import type {
+  CostCategory, CreateCostCategoryInput,
   CostEntry, CreateCostEntryInput,
   PurchaseItem, CreatePurchaseItemInput,
-  PurchaseBill, CreatePurchaseBillInput
+  PurchaseBill, // CreatePurchaseBillInput is handled per form
+  Supplier
 } from '@/types';
 
 // Cost Category Actions
@@ -16,17 +17,20 @@ export async function addCostCategoryAction(categoryData: CreateCostCategoryInpu
     const trimmedName = categoryData.name.trim();
     // Case-insensitive check for existing category
     const categoriesCol = collection(db, 'costCategories');
-    const querySnapshot = await getDocs(categoriesCol);
-    const existingCategory = querySnapshot.docs.find(
-      doc => doc.data().name.toLowerCase() === trimmedName.toLowerCase()
-    );
+    const nameQuery = query(categoriesCol, where('nameLower', '==', trimmedName.toLowerCase()));
+    const querySnapshot = await getDocs(nameQuery);
 
-    if (existingCategory) {
+    if (!querySnapshot.empty) {
       return { success: false, error: `Category "${trimmedName}" already exists.` };
     }
 
-    const docRef = await addDoc(collection(db, 'costCategories'), { name: trimmedName });
-    const newCategory: CostCategory = { name: trimmedName, id: docRef.id };
+    const dataToSave = {
+      name: trimmedName,
+      nameLower: trimmedName.toLowerCase(),
+    };
+
+    const docRef = await addDoc(collection(db, 'costCategories'), dataToSave);
+    const newCategory: CostCategory = { name: trimmedName, id: docRef.id }; // nameLower is not part of CostCategory type
     return { success: true, category: newCategory };
   } catch (e) {
     console.error('Error adding cost category: ', e);
@@ -41,7 +45,7 @@ export async function fetchCostCategoriesAction(): Promise<CostCategory[]> {
     const querySnapshot = await getDocs(q);
     const categories = querySnapshot.docs.map(doc => ({
       id: doc.id,
-      ...doc.data(),
+      name: doc.data().name, // Ensure only 'name' is mapped from data
     } as CostCategory));
     return categories;
   } catch (error) {
@@ -54,7 +58,7 @@ export async function fetchCostCategoriesAction(): Promise<CostCategory[]> {
 export async function addPurchaseItemAction(itemData: CreatePurchaseItemInput): Promise<{ success: boolean; item?: PurchaseItem; error?: string }> {
   try {
     const trimmedName = itemData.name.trim();
-    const trimmedCode = itemData.code?.trim();
+    const trimmedCode = itemData.code?.trim().toUpperCase();
 
     const itemsCol = collection(db, 'purchaseItems');
 
@@ -68,23 +72,20 @@ export async function addPurchaseItemAction(itemData: CreatePurchaseItemInput): 
       return { success: false, error: `Purchase item named "${trimmedName}" already exists in category "${itemData.categoryName}".` };
     }
 
-    // Case-insensitive check for unique code if provided
+    // Case-insensitive check for unique code if provided (globally unique for codes)
     if (trimmedCode && trimmedCode.length > 0) {
-      const codeQuery = query(itemsCol, where('code', '!=', null)); // Query items that have a code
+      const codeQuery = query(itemsCol, where('code', '==', trimmedCode)); // Direct match, already uppercase
       const codeQuerySnapshot = await getDocs(codeQuery);
-      const existingItemByCode = codeQuerySnapshot.docs.find(
-        doc => doc.data().code?.toLowerCase() === trimmedCode.toLowerCase()
-      );
-      if (existingItemByCode) {
+      if (!codeQuerySnapshot.empty) {
         return { success: false, error: `Purchase item code "${trimmedCode}" already exists.` };
       }
     }
-    
+
     const dataToSave: Omit<PurchaseItem, 'id'> = {
       name: trimmedName,
       categoryId: itemData.categoryId,
       categoryName: itemData.categoryName,
-      code: trimmedCode || undefined, // Store as undefined if empty
+      code: trimmedCode || undefined,
     };
 
     const docRef = await addDoc(itemsCol, dataToSave);
@@ -118,27 +119,32 @@ export async function fetchPurchaseItemsAction(categoryId?: string): Promise<Pur
 
 // Purchase Bill and associated Cost Entries Action
 export async function addPurchaseBillWithEntriesAction(
-  billData: Omit<CreatePurchaseBillInput, 'items'>, 
-  items: Array<Omit<CreateCostEntryInput, 'date' | 'purchaseBillId' | 'categoryName' | 'categoryId' | 'purchaseItemCode' > & { categoryId: string, categoryName: string, purchaseItemCode?: string }> 
+  billData: { // Modified to accept supplierId and supplierName
+    billDate: string; // ISO string
+    supplierId?: string;
+    supplierName?: string;
+    billNumber?: string;
+    purchaseOrderNumber?: string;
+  },
+  items: Array<Omit<CreateCostEntryInput, 'date' | 'purchaseBillId' | 'categoryName' | 'categoryId' | 'purchaseItemCode' > & { categoryId: string, categoryName: string, purchaseItemCode?: string }>
 ): Promise<{ success: boolean; purchaseBill?: PurchaseBill; costEntries?: CostEntry[], error?: string }> {
   const batch = writeBatch(db);
 
   try {
     const billDateTimestamp = Timestamp.fromDate(new Date(billData.billDate));
     const totalAmount = items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-    
+
     const purchaseBillRef = doc(collection(db, 'purchaseBills'));
-    const newPurchaseBill: Omit<PurchaseBill, 'id'> = {
-      billDate: billData.billDate, 
+    const newPurchaseBillData: Omit<PurchaseBill, 'id' > = {
+      billDate: billData.billDate,
+      supplierId: billData.supplierId || undefined,
       supplierName: billData.supplierName || undefined,
       billNumber: billData.billNumber || undefined,
       purchaseOrderNumber: billData.purchaseOrderNumber || undefined,
-      supplierAddress: billData.supplierAddress || undefined,
-      supplierMobile: billData.supplierMobile || undefined,
       totalAmount,
       createdAt: new Date().toISOString(),
     };
-    batch.set(purchaseBillRef, { ...newPurchaseBill, billDate: billDateTimestamp, createdAt: Timestamp.now() });
+    batch.set(purchaseBillRef, { ...newPurchaseBillData, billDate: billDateTimestamp, createdAt: Timestamp.now() });
 
     const createdCostEntries: CostEntry[] = [];
     for (const item of items) {
@@ -148,10 +154,10 @@ export async function addPurchaseBillWithEntriesAction(
         purchaseItemId: item.purchaseItemId,
         purchaseItemName: item.purchaseItemName,
         purchaseItemCode: item.purchaseItemCode || undefined,
-        categoryId: item.categoryId, 
+        categoryId: item.categoryId,
         categoryName: item.categoryName,
         amount: Number(item.amount) || 0,
-        date: billData.billDate, 
+        date: billData.billDate,
       };
       batch.set(costEntryRef, { ...costEntryData, date: billDateTimestamp });
       createdCostEntries.push({ ...costEntryData, id: costEntryRef.id });
@@ -159,7 +165,7 @@ export async function addPurchaseBillWithEntriesAction(
 
     await batch.commit();
 
-    const persistedBill: PurchaseBill = { ...newPurchaseBill, id: purchaseBillRef.id };
+    const persistedBill: PurchaseBill = { ...newPurchaseBillData, id: purchaseBillRef.id };
     return { success: true, purchaseBill: persistedBill, costEntries: createdCostEntries };
 
   } catch (e) {
@@ -180,7 +186,7 @@ export async function fetchCostEntriesAction(startDate?: string, endDate?: strin
     }
     if (endDate) {
       const endOfDay = new Date(endDate);
-      endOfDay.setHours(23, 59, 59, 999); 
+      endOfDay.setHours(23, 59, 59, 999);
       q = query(q, where('date', '<=', Timestamp.fromDate(endOfDay)));
     }
 
@@ -190,7 +196,7 @@ export async function fetchCostEntriesAction(startDate?: string, endDate?: strin
       return {
         id: doc.id,
         ...data,
-        date: (data.date as Timestamp).toDate().toISOString(), 
+        date: (data.date as Timestamp).toDate().toISOString(),
       } as CostEntry;
     });
     return entries;

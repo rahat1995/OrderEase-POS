@@ -40,30 +40,43 @@ export interface PurchaseItem {
 }
 export type CreatePurchaseItemInput = Omit<PurchaseItem, 'id'>;
 
+export interface Supplier {
+  id: string;
+  name: string;
+  address?: string;
+  mobile?: string;
+  contactPerson?: string;
+  email?: string;
+}
+export type CreateSupplierInput = Omit<Supplier, 'id'>;
+
 export interface PurchaseBill {
   id: string;
   billDate: string; // ISO string
-  supplierName?: string;
+  supplierId?: string; // Link to Supplier collection
+  supplierName?: string; // Denormalized for easy display
   billNumber?: string;
   purchaseOrderNumber?: string;
-  supplierAddress?: string;
-  supplierMobile?: string;
+  // supplierAddress?: string; // Removed, should come from Supplier
+  // supplierMobile?: string; // Removed, should come from Supplier
   totalAmount: number; // Sum of all cost entries in this bill
   createdAt: string; // ISO string, for record keeping
 }
+// For CreatePurchaseBillInput, we don't need supplierAddress and supplierMobile directly here anymore
+// as they will be linked via supplierId.
 export type CreatePurchaseBillInput = Omit<PurchaseBill, 'id' | 'totalAmount' | 'createdAt'> & {
-  items: Array<Omit<CreateCostEntryInput, 'date' | 'purchaseBillId' | 'categoryName' | 'categoryId' >>; 
+  items: Array<Omit<CreateCostEntryInput, 'date' | 'purchaseBillId' | 'categoryName' | 'categoryId' | 'purchaseItemCode' > & { categoryId: string, categoryName: string, purchaseItemCode?: string }>;
 };
 
 
 export interface CostEntry {
-  id: string; 
-  purchaseBillId: string; 
-  purchaseItemId: string; 
-  purchaseItemName: string; 
+  id: string;
+  purchaseBillId: string;
+  purchaseItemId: string;
+  purchaseItemName: string;
   purchaseItemCode?: string; // Denormalized from PurchaseItem
-  categoryId: string; 
-  categoryName: string; 
+  categoryId: string;
+  categoryName: string;
   amount: number;
   date: string; // ISO string (this will be the billDate from PurchaseBill)
 }
