@@ -1,11 +1,11 @@
 
 import type { Metadata } from 'next';
-import { Geist } from 'next/font/google'; 
+import { Geist } from 'next/font/google';
 import Link from 'next/link';
 import './globals.css';
 import { OrderProvider } from '@/contexts/OrderContext';
 import { Toaster } from '@/components/ui/toaster';
-import { Button }        from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { Home, FileText, ListPlus, Landmark, TrendingUp } from 'lucide-react';
 
 
@@ -65,7 +65,7 @@ export default function RootLayout({
               </div>
             </nav>
           </header>
-          <div className="min-h-[calc(100vh-var(--header-height,60px))]"> 
+          <div className="min-h-[calc(100vh-var(--header-height,60px))]">
             {children}
           </div>
           <Toaster />
