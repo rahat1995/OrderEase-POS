@@ -6,7 +6,7 @@ import './globals.css';
 import { OrderProvider } from '@/contexts/OrderContext';
 import { Toaster } from '@/components/ui/toaster';
 import { Button } from '@/components/ui/button';
-import { Home, FileText, ListPlus, Landmark, TrendingUp, CreditCard, Users, BarChart3, Scale, ShoppingCart, Settings, PieChart } from 'lucide-react';
+import { BarChart3, CreditCard, FileText, Landmark, ListPlus, PieChart, ShoppingCart, TrendingUp, Users } from 'lucide-react';
 
 
 const geistSans = Geist({
