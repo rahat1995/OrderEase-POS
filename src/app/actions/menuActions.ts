@@ -3,27 +3,27 @@
 
 import { db } from '@/lib/firebase';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
-import type { MenuItem } from '@/types';
-// deleteImageAction is not used directly here anymore, it's called from the client page
-// import { deleteImageAction } from './storageActions';
-
-// Type for creating a menu item, ID is optional as Firestore generates it
-export type CreateMenuItemInput = Omit<MenuItem, 'id'> & { id?: string };
+import type { MenuItem, CreateMenuItemInput } from '@/types';
 
 function formatFirebaseError(e: unknown, defaultMessage: string): string {
   if (e instanceof Error) {
-    // Check if it's a FirebaseError-like object with a code
-    if (typeof e === 'object' && e !== null && 'code' in e && typeof (e as any).code === 'string') {
-      return `Firebase Error (${(e as any).code}): ${e.message}`;
+    // Check if it's a FirebaseError-like object with a code and message
+    if (typeof e === 'object' && e !== null && 'code' in e && typeof (e as any).code === 'string' && 'message' in e && typeof (e as any).message === 'string') {
+      return `Firebase Error (${(e as any).code}): ${(e as any).message}`;
     }
-    return e.message;
+    return e.message; // Standard Error object
   }
+  if (typeof e === 'string') {
+    return e; // If e is already a string error message
+  }
+  // For other unknown types, log it and return the default.
+  console.error("Unknown error type in formatFirebaseError:", e);
   return defaultMessage;
 }
 
 export async function addMenuItemAction(itemData: CreateMenuItemInput): Promise<{ success: boolean; menuItem?: MenuItem; error?: string }> {
   try {
-    // Ensure price is a number
+    // Ensure price is a number and provide defaults for optional fields
     const dataToSave = {
       ...itemData,
       price: Number(itemData.price) || 0,
@@ -32,12 +32,12 @@ export async function addMenuItemAction(itemData: CreateMenuItemInput): Promise<
     };
     const docRef = await addDoc(collection(db, 'menuItems'), dataToSave);
     const newMenuItem: MenuItem = { ...dataToSave, id: docRef.id };
-    console.log('Menu item added with ID: ', docRef.id);
+    console.log('Menu item added with ID: ', docRef.id); // Server-side log
     return { success: true, menuItem: newMenuItem };
   } catch (e) {
-    console.error('Error adding menu item: ', e);
+    console.error('Error in addMenuItemAction: ', e); // Server-side log
     const errorMessage = formatFirebaseError(e, 'An unknown error occurred while adding the menu item.');
-    return { success: false, error: errorMessage };
+    return { success: false, error: errorMessage } as { success: boolean; menuItem?: MenuItem; error?: string };
   }
 }
 
@@ -67,18 +67,19 @@ export async function updateMenuItemAction(itemId: string, updates: Partial<Omit
     if (updates.price !== undefined) {
       updatesToSave.price = Number(updates.price) || 0;
     }
-    if (updates.imageUrl === undefined && updates.name) { // if imageUrl is undefined (likely removed), ensure placeholder with new name
+    // If imageUrl is explicitly set to undefined (meaning it was removed by user) and name exists, generate placeholder
+    if (updates.imageUrl === undefined && updates.name) { 
         updatesToSave.imageUrl = `https://placehold.co/300x200.png?text=${encodeURIComponent(updates.name || 'Item')}`;
     }
 
 
     await updateDoc(itemDocRef, updatesToSave);
-    console.log('Menu item updated: ', itemId);
+    console.log('Menu item updated: ', itemId); // Server-side log
     return { success: true };
   } catch (e) {
-    console.error('Error updating menu item: ', e);
+    console.error('Error in updateMenuItemAction: ', e); // Server-side log
     const errorMessage = formatFirebaseError(e, 'An unknown error occurred while updating the menu item.');
-    return { success: false, error: errorMessage };
+    return { success: false, error: errorMessage } as { success: boolean; error?: string };
   }
 }
 
@@ -86,11 +87,11 @@ export async function deleteMenuItemAction(itemId: string): Promise<{ success: b
   try {
     const itemDocRef = doc(db, 'menuItems', itemId);
     await deleteDoc(itemDocRef);
-    console.log('Menu item deleted from Firestore: ', itemId);
+    console.log('Menu item deleted from Firestore: ', itemId); // Server-side log
     return { success: true };
   } catch (e) {
-    console.error('Error deleting menu item from Firestore: ', e);
+    console.error('Error in deleteMenuItemAction from Firestore: ', e); // Server-side log
     const errorMessage = formatFirebaseError(e, 'An unknown error occurred while deleting the menu item from Firestore.');
-    return { success: false, error: errorMessage };
+    return { success: false, error: errorMessage } as { success: boolean; error?: string };
   }
 }
