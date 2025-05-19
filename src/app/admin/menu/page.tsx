@@ -21,7 +21,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription as ShadcnDialogDescription, 
+  DialogDescription as ShadcnDialogDescription,
   DialogTrigger,
   DialogFooter,
 } from '@/components/ui/dialog';
@@ -74,35 +74,67 @@ export default function MenuManagementPage() {
 
   const handleFormSubmit = async (data: CreateMenuItemInput) => {
     setIsDialogSubmitting(true);
+    let rawResultFromAction; 
     try {
-      let result;
+      console.log("Submitting data to server action:", data);
+
       if (editingItem && editingItem.id) {
-        result = await updateMenuItemAction(editingItem.id, data);
-        if (result.success) {
-          toast({ title: "Success", description: "Menu item updated." });
+        console.log("Attempting to update item ID:", editingItem.id);
+        rawResultFromAction = await updateMenuItemAction(editingItem.id, data);
+        console.log("Raw result from updateMenuItemAction:", rawResultFromAction);
+
+        if (rawResultFromAction && typeof rawResultFromAction.success === 'boolean') {
+          if (rawResultFromAction.success) {
+            toast({ title: "Success", description: "Menu item updated." });
+          } else {
+            console.error("updateMenuItemAction reported failure. Result:", rawResultFromAction);
+            throw new Error(rawResultFromAction.error || "Menu item update failed. Server action indicated failure but provided no specific error message.");
+          }
         } else {
-          console.error("updateMenuItemAction failed. Result:", result);
-          throw new Error(result.error || "Failed to update the menu item. Please try again.");
+          console.error("updateMenuItemAction returned an unexpected response structure. Raw result:", rawResultFromAction);
+          throw new Error("Failed to update menu item. Received an unexpected response structure from the server.");
         }
       } else {
-        result = await addMenuItemAction(data);
-        if (result.success && result.menuItem) {
-          toast({ title: "Success", description: "New menu item added." });
+        console.log("Attempting to add new item.");
+        rawResultFromAction = await addMenuItemAction(data);
+        console.log("Raw result from addMenuItemAction:", rawResultFromAction);
+
+        if (rawResultFromAction && typeof rawResultFromAction.success === 'boolean') {
+          if (rawResultFromAction.success && rawResultFromAction.menuItem) {
+            toast({ title: "Success", description: "New menu item added." });
+          } else {
+            console.error("addMenuItemAction reported failure or missing menuItem. Result:", rawResultFromAction);
+            throw new Error(rawResultFromAction.error || "Menu item addition failed. Server action indicated failure, no specific error, or did not return item.");
+          }
         } else {
-          console.error("addMenuItemAction failed. Result:", result);
-          throw new Error(result.error || "Failed to add the new menu item. Please try again.");
+          console.error("addMenuItemAction returned an unexpected response structure. Raw result:", rawResultFromAction);
+          throw new Error("Failed to add menu item. Received an unexpected response structure from the server.");
         }
       }
-      await loadMenuItems(); // Refresh the list
+      await loadMenuItems();
       setIsFormOpen(false);
       setEditingItem(null);
     } catch (error: unknown) {
-      // Log the full error object for better debugging
-      console.error("Error in handleFormSubmit. The error object thrown was:", error);
+      console.error("Error in handleFormSubmit. The error object caught was:", error);
+      if (rawResultFromAction !== undefined) { // Log rawResult again if error occurred after it was set
+         console.error("Raw result from action (at time of error):", rawResultFromAction);
+      }
+
       let descriptionMessage = "An unexpected error occurred. Please check the console for more details.";
       if (error instanceof Error && error.message) {
         descriptionMessage = error.message;
       }
+      
+      if (descriptionMessage.toLowerCase().includes("failed to fetch") || 
+          descriptionMessage.toLowerCase().includes("networkerror") ||
+          descriptionMessage.toLowerCase().includes("server is unreachable")) {
+        descriptionMessage = "A network error occurred or the server is unreachable. Please check your internet connection and try again. If the problem persists, check server logs.";
+      } else if (descriptionMessage.toLowerCase().includes("unexpected response structure")) {
+        // This is our custom message from above, keep it as is.
+      } else if (error instanceof TypeError && (error.message.includes("is undefined") || error.message.includes("is not an object"))) {
+        descriptionMessage = "An internal error occurred while processing the server's response, possibly due to unexpected data format. Please check console logs for details about the raw server response.";
+      }
+
       toast({
         title: "Menu Item Error",
         description: descriptionMessage,
@@ -286,3 +318,4 @@ export default function MenuManagementPage() {
     </div>
   );
 }
+
