@@ -46,7 +46,7 @@ export default function MenuItemForm({ initialData, onSubmit, isSubmitting: isPa
   const [imagePreview, setImagePreview] = useState<string | null>(initialData?.imageUrl || null);
   // Store the original image URL from initialData to compare if it changes
   const [currentImageUrl, setCurrentImageUrl] = useState<string | undefined>(initialData?.imageUrl);
-
+  const [isUploading, setIsUploading] = useState(false); // Define isUploading state
 
   const form = useForm<MenuItemFormData>({
     resolver: zodResolver(menuItemFormSchema),
@@ -241,5 +241,3 @@ export default function MenuItemForm({ initialData, onSubmit, isSubmitting: isPa
     </Card>
   );
 }
-
-    
