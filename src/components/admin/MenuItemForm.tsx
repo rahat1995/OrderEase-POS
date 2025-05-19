@@ -77,8 +77,6 @@ export default function MenuItemForm({ initialData, onSubmit, isSubmitting: isPa
       };
       reader.readAsDataURL(file);
     } else {
-      // If no file is selected (e.g., user cancels file dialog),
-      // revert to initial image if editing, or null if new.
       setSelectedFile(null);
       setImagePreview(initialData?.imageUrl || null);
     }
@@ -86,60 +84,43 @@ export default function MenuItemForm({ initialData, onSubmit, isSubmitting: isPa
 
   const removeImage = () => {
     setSelectedFile(null);
-    setImagePreview(null); 
-    // For existing items, this means the image might be removed on save
-    // if no new image is uploaded and initialData.imageUrl existed.
-    // The actual deletion from storage will happen on submit if needed.
+    setImagePreview(null);
   };
 
   const internalFormSubmit: SubmitHandler<MenuItemFormData> = async (data) => {
     setIsUploading(true);
-    let finalImageUrl = currentImageUrl; // Start with existing or undefined
+    let finalImageUrl = currentImageUrl;
 
     try {
-      if (selectedFile) { // New image selected for upload
-        // If there was an old image for an existing item, delete it from storage
-        if (initialData && initialData.id && currentImageUrl && currentImageUrl !== imagePreview) {
-           // Only delete if preview (new file) is different from current (old db) image
-          const deleteResult = await deleteImageAction(currentImageUrl);
-          if (!deleteResult.success) {
-            toast({ title: "Warning", description: `Could not delete old image: ${deleteResult.error}`, variant: "destructive" });
-            // Continue with upload and update despite old image deletion failure
-          } else {
-            console.log("Old image deleted successfully from storage.");
-          }
+      if (selectedFile) {
+        if (initialData && initialData.id && currentImageUrl && currentImageUrl !== imagePreview && currentImageUrl.includes('firebasestorage.googleapis.com')) {
+          await deleteImageAction(currentImageUrl);
         }
 
-        const formData = new FormData();
-        formData.append('imageFile', selectedFile);
-        const uploadResult = await uploadImageAction(formData);
+        const formDataForUpload = new FormData();
+        formDataForUpload.append('imageFile', selectedFile);
+        const uploadResult = await uploadImageAction(formDataForUpload);
 
         if (uploadResult.success && uploadResult.imageUrl) {
           finalImageUrl = uploadResult.imageUrl;
         } else {
           throw new Error(uploadResult.error || "Image upload failed.");
         }
-      } else if (!imagePreview && initialData && initialData.imageUrl) {
-        // Image was removed by user (imagePreview is null), and there was an initial image.
-        // This means we need to delete the existing image from storage.
-        const deleteResult = await deleteImageAction(initialData.imageUrl);
-        if (!deleteResult.success) {
-           toast({ title: "Warning", description: `Could not delete image: ${deleteResult.error}`, variant: "destructive" });
-        } else {
-          console.log("Image explicitly removed and deleted from storage.");
-        }
-        finalImageUrl = `https://placehold.co/300x200.png?text=${encodeURIComponent(data.name || 'Item Removed')}`; // Set to placeholder
+      } else if (!imagePreview && initialData && initialData.imageUrl && initialData.imageUrl.includes('firebasestorage.googleapis.com')) {
+        // Image was removed by user (imagePreview is null), and there was an initial image from Firebase Storage.
+        await deleteImageAction(initialData.imageUrl);
+        finalImageUrl = `https://placehold.co/300x200.png?text=${encodeURIComponent(data.name || 'Item Removed')}`;
       }
 
 
       const submitData: CreateMenuItemInput = {
         ...data,
-        price: Number(data.price), // Ensure price is number
+        price: Number(data.price),
         imageUrl: finalImageUrl || `https://placehold.co/300x200.png?text=${encodeURIComponent(data.name || 'Item')}`,
         dataAiHint: data.dataAiHint || '',
       };
       
-      await onSubmit(submitData); // Call parent's submit function
+      await onSubmit(submitData);
 
     } catch (error) {
       toast({ title: "Submission Error", description: (error as Error).message, variant: "destructive" });

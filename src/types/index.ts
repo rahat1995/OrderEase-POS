@@ -4,7 +4,7 @@ export interface MenuItem {
   name: string;
   price: number;
   imageUrl: string;
-  dataAiHint?: string;
+  dataAiHint?: string; // Reinstated for AI hint
 }
 
 export interface CartItem extends MenuItem {
@@ -124,6 +124,6 @@ export interface SupplierLedgerData {
   openingBalance: number;
   transactions: LedgerTransaction[];
   totalPurchasesInPeriod: number;
-  totalPaymentsInPeriod: number;
+  totalPaymentsInPeriod:
   closingBalance: number; // This will be the last runningBalance
 }

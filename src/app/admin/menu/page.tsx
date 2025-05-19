@@ -105,6 +105,7 @@ export default function MenuManagementPage() {
     if (!itemToDelete || !itemToDelete.id) return;
     setIsDialogSubmitting(true);
     try {
+      // Attempt to delete image from storage ONLY if it's a Firebase Storage URL
       if (itemToDelete.imageUrl && itemToDelete.imageUrl.includes('firebasestorage.googleapis.com')) {
         const imageDeleteResult = await deleteImageAction(itemToDelete.imageUrl);
         if (!imageDeleteResult.success) {
@@ -248,7 +249,7 @@ export default function MenuManagementPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center"><AlertTriangle className="mr-2 h-5 w-5 text-destructive"/>Confirm Deletion</DialogTitle>
             <ShadcnDialogDescription>
-              This action cannot be undone and will permanently delete the menu item {itemToDelete?.imageUrl && itemToDelete.imageUrl.includes('firebasestorage') ? 'and its image from storage' : ''}.
+              This action cannot be undone and will permanently delete the menu item {itemToDelete?.imageUrl && itemToDelete.imageUrl.includes('firebasestorage.googleapis.com') ? 'and its image from storage' : ''}.
             </ShadcnDialogDescription>
           </DialogHeader>
           <p className="py-2">
