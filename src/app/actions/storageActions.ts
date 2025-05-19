@@ -33,6 +33,10 @@ export async function uploadImageAction(
     // Attempt to provide more specific Firebase Storage error codes if available
     if (typeof e === 'object' && e !== null && 'code' in e) {
         const firebaseError = e as { code: string; message: string };
+        // Specific check for "no default bucket"
+        if (firebaseError.code === 'storage/no-default-bucket') {
+            return { success: false, error: `Firebase Storage: No default bucket found. Please ensure Storage is enabled in your Firebase project and the 'storageBucket' property in your Firebase config (.env.local) is correct.` };
+        }
         return { success: false, error: `Firebase Storage Error (${firebaseError.code}): ${firebaseError.message}` };
     }
     return { success: false, error: errorMessage };
