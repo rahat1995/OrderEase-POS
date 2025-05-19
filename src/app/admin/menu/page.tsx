@@ -74,7 +74,7 @@ export default function MenuManagementPage() {
 
   const handleFormSubmit = async (data: CreateMenuItemInput) => {
     setIsDialogSubmitting(true);
-    let rawResultFromAction; 
+    let rawResultFromAction: any; 
     try {
       console.log("Submitting data to server action:", data);
 
@@ -91,7 +91,7 @@ export default function MenuManagementPage() {
             throw new Error(rawResultFromAction.error || "Menu item update failed. Server action indicated failure but provided no specific error message.");
           }
         } else {
-          console.error("updateMenuItemAction returned an unexpected response structure. Raw result:", rawResultFromAction);
+          console.error("UNEXPECTED SERVER RESPONSE STRUCTURE for update. The 'rawResultFromAction' was:", rawResultFromAction);
           throw new Error("Failed to update menu item. Received an unexpected response structure from the server.");
         }
       } else {
@@ -107,7 +107,7 @@ export default function MenuManagementPage() {
             throw new Error(rawResultFromAction.error || "Menu item addition failed. Server action indicated failure, no specific error, or did not return item.");
           }
         } else {
-          console.error("addMenuItemAction returned an unexpected response structure. Raw result:", rawResultFromAction);
+          console.error("UNEXPECTED SERVER RESPONSE STRUCTURE for add. The 'rawResultFromAction' was:", rawResultFromAction);
           throw new Error("Failed to add menu item. Received an unexpected response structure from the server.");
         }
       }
@@ -116,7 +116,7 @@ export default function MenuManagementPage() {
       setEditingItem(null);
     } catch (error: unknown) {
       console.error("Error in handleFormSubmit. The error object caught was:", error);
-      if (rawResultFromAction !== undefined) { // Log rawResult again if error occurred after it was set
+      if (rawResultFromAction !== undefined) { 
          console.error("Raw result from action (at time of error):", rawResultFromAction);
       }
 
@@ -125,13 +125,13 @@ export default function MenuManagementPage() {
         descriptionMessage = error.message;
       }
       
-      if (descriptionMessage.toLowerCase().includes("failed to fetch") || 
-          descriptionMessage.toLowerCase().includes("networkerror") ||
-          descriptionMessage.toLowerCase().includes("server is unreachable")) {
+      if (String(descriptionMessage).toLowerCase().includes("failed to fetch") || 
+          String(descriptionMessage).toLowerCase().includes("networkerror") ||
+          String(descriptionMessage).toLowerCase().includes("server is unreachable")) {
         descriptionMessage = "A network error occurred or the server is unreachable. Please check your internet connection and try again. If the problem persists, check server logs.";
-      } else if (descriptionMessage.toLowerCase().includes("unexpected response structure")) {
+      } else if (String(descriptionMessage).toLowerCase().includes("unexpected response structure")) {
         // This is our custom message from above, keep it as is.
-      } else if (error instanceof TypeError && (error.message.includes("is undefined") || error.message.includes("is not an object"))) {
+      } else if (error instanceof TypeError && (String(error.message).includes("is undefined") || String(error.message).includes("is not an object"))) {
         descriptionMessage = "An internal error occurred while processing the server's response, possibly due to unexpected data format. Please check console logs for details about the raw server response.";
       }
 
@@ -149,6 +149,7 @@ export default function MenuManagementPage() {
   const handleDeleteConfirm = async () => {
     if (!itemToDelete || !itemToDelete.id) return;
     setIsDialogSubmitting(true);
+    let rawDeleteResult: any;
     try {
       if (itemToDelete.imageUrl && itemToDelete.imageUrl.includes('firebasestorage.googleapis.com')) {
         const imageDeleteResult = await deleteImageAction(itemToDelete.imageUrl);
@@ -162,15 +163,25 @@ export default function MenuManagementPage() {
         }
       }
 
-      const result = await deleteMenuItemAction(itemToDelete.id);
-      if (result.success) {
-        toast({ title: "Success", description: `Menu item "${itemToDelete.name}" deleted.` });
-        await loadMenuItems();
+      rawDeleteResult = await deleteMenuItemAction(itemToDelete.id);
+      console.log("Raw result from deleteMenuItemAction:", rawDeleteResult);
+
+      if (rawDeleteResult && typeof rawDeleteResult.success === 'boolean') {
+        if (rawDeleteResult.success) {
+          toast({ title: "Success", description: `Menu item "${itemToDelete.name}" deleted.` });
+          await loadMenuItems();
+        } else {
+          throw new Error(rawDeleteResult.error || "Failed to delete menu item. Server reported failure.");
+        }
       } else {
-        throw new Error(result.error || "Failed to delete menu item.");
+        console.error("UNEXPECTED SERVER RESPONSE STRUCTURE for delete. The 'rawDeleteResult' was:", rawDeleteResult);
+        throw new Error("Failed to delete menu item. Received an unexpected response structure from the server.");
       }
     } catch (error: unknown) {
       console.error("Error deleting menu item. The error object was:", error);
+      if (rawDeleteResult !== undefined) {
+        console.error("Raw result from delete action (at time of error):", rawDeleteResult);
+      }
       let descriptionMessage = "An unexpected error occurred while deleting the menu item. Check console for details.";
       if (error instanceof Error && error.message) {
         descriptionMessage = error.message;
@@ -318,4 +329,3 @@ export default function MenuManagementPage() {
     </div>
   );
 }
-

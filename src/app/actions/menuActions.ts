@@ -37,7 +37,7 @@ export async function addMenuItemAction(itemData: CreateMenuItemInput): Promise<
   } catch (e) {
     console.error('Error in addMenuItemAction: ', e); // Server-side log
     const errorMessage = formatFirebaseError(e, 'An unknown error occurred while adding the menu item.');
-    return { success: false, error: errorMessage } as { success: boolean; menuItem?: MenuItem; error?: string };
+    return { success: false, error: errorMessage };
   }
 }
 
@@ -79,7 +79,7 @@ export async function updateMenuItemAction(itemId: string, updates: Partial<Omit
   } catch (e) {
     console.error('Error in updateMenuItemAction: ', e); // Server-side log
     const errorMessage = formatFirebaseError(e, 'An unknown error occurred while updating the menu item.');
-    return { success: false, error: errorMessage } as { success: boolean; error?: string };
+    return { success: false, error: errorMessage };
   }
 }
 
@@ -92,6 +92,6 @@ export async function deleteMenuItemAction(itemId: string): Promise<{ success: b
   } catch (e) {
     console.error('Error in deleteMenuItemAction from Firestore: ', e); // Server-side log
     const errorMessage = formatFirebaseError(e, 'An unknown error occurred while deleting the menu item from Firestore.');
-    return { success: false, error: errorMessage } as { success: boolean; error?: string };
+    return { success: false, error: errorMessage };
   }
 }
