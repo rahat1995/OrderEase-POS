@@ -21,11 +21,11 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription as ShadcnDialogDescription, // Aliased to avoid conflict
+  DialogDescription as ShadcnDialogDescription, 
   DialogTrigger,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { Card, CardContent, CardDescription as PageCardDescription, CardHeader as PageCardHeader, CardTitle as PageCardTitle } from '@/components/ui/card';
+import { Card as PageCard, CardContent as PageCardContent, CardDescription as PageCardDescription, CardHeader as PageCardHeader, CardTitle as PageCardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/hooks/use-toast';
 import { PlusCircle, Edit3, Trash2, Loader2, ListPlus, AlertTriangle, ImageOff } from 'lucide-react';
@@ -96,9 +96,10 @@ export default function MenuManagementPage() {
       await loadMenuItems(); // Refresh the list
       setIsFormOpen(false);
       setEditingItem(null);
-    } catch (error) {
-      console.error("Error submitting menu item form:", error);
-      let descriptionMessage = "An unexpected error occurred while saving the menu item.";
+    } catch (error: unknown) {
+      // Log the full error object for better debugging
+      console.error("Error in handleFormSubmit. The error object thrown was:", error);
+      let descriptionMessage = "An unexpected error occurred. Please check the console for more details.";
       if (error instanceof Error && error.message) {
         descriptionMessage = error.message;
       }
@@ -117,7 +118,6 @@ export default function MenuManagementPage() {
     if (!itemToDelete || !itemToDelete.id) return;
     setIsDialogSubmitting(true);
     try {
-      // Attempt to delete image from storage ONLY if it's a Firebase Storage URL
       if (itemToDelete.imageUrl && itemToDelete.imageUrl.includes('firebasestorage.googleapis.com')) {
         const imageDeleteResult = await deleteImageAction(itemToDelete.imageUrl);
         if (!imageDeleteResult.success) {
@@ -137,9 +137,9 @@ export default function MenuManagementPage() {
       } else {
         throw new Error(result.error || "Failed to delete menu item.");
       }
-    } catch (error) {
-      console.error("Error deleting menu item:", error);
-      let descriptionMessage = "An unexpected error occurred while deleting the menu item.";
+    } catch (error: unknown) {
+      console.error("Error deleting menu item. The error object was:", error);
+      let descriptionMessage = "An unexpected error occurred while deleting the menu item. Check console for details.";
       if (error instanceof Error && error.message) {
         descriptionMessage = error.message;
       }
@@ -210,8 +210,8 @@ export default function MenuManagementPage() {
           </DialogContent>
         </Dialog>
       </PageCardHeader>
-      <Card className="shadow-xl">
-        <CardContent className={menuItems.length === 0 ? "pt-6" : ""}>
+      <PageCard className="shadow-xl">
+        <PageCardContent className={menuItems.length === 0 ? "pt-6" : ""}>
           {isLoading && menuItems.length > 0 && <div className="text-center py-4"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" /> Refreshing...</div>}
           {!isLoading && menuItems.length === 0 ? (
              <div className="text-center py-10 text-muted-foreground">
@@ -258,8 +258,8 @@ export default function MenuManagementPage() {
               </Table>
             </ScrollArea>
           )}
-        </CardContent>
-      </Card>
+        </PageCardContent>
+      </PageCard>
 
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>
@@ -286,4 +286,3 @@ export default function MenuManagementPage() {
     </div>
   );
 }
-
