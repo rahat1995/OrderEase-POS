@@ -35,7 +35,7 @@ export async function addMenuItemAction(itemData: CreateMenuItemInput): Promise<
     console.log('Menu item added with ID: ', docRef.id); // Server-side log
     return { success: true, menuItem: newMenuItem };
   } catch (e) {
-    console.error('Error in addMenuItemAction: ', e); // Server-side log
+    console.error('Error in addMenuItemAction (server-side): ', e); // Detailed server-side log
     const errorMessage = formatFirebaseError(e, 'An unknown error occurred while adding the menu item.');
     return { success: false, error: errorMessage };
   }
@@ -52,7 +52,7 @@ export async function fetchMenuItemsAction(): Promise<MenuItem[]> {
     } as MenuItem));
     return menuItems;
   } catch (error) {
-    console.error("Error fetching menu items: ", error);
+    console.error("Error fetching menu items (server-side): ", error);
     // This function is typically called by client components that handle their own errors/toasts
     // Re-throwing allows the client to know the fetch failed.
     throw error; 
@@ -77,7 +77,7 @@ export async function updateMenuItemAction(itemId: string, updates: Partial<Omit
     console.log('Menu item updated: ', itemId); // Server-side log
     return { success: true };
   } catch (e) {
-    console.error('Error in updateMenuItemAction: ', e); // Server-side log
+    console.error('Error in updateMenuItemAction (server-side): ', e); // Detailed server-side log
     const errorMessage = formatFirebaseError(e, 'An unknown error occurred while updating the menu item.');
     return { success: false, error: errorMessage };
   }
@@ -90,7 +90,7 @@ export async function deleteMenuItemAction(itemId: string): Promise<{ success: b
     console.log('Menu item deleted from Firestore: ', itemId); // Server-side log
     return { success: true };
   } catch (e) {
-    console.error('Error in deleteMenuItemAction from Firestore: ', e); // Server-side log
+    console.error('Error in deleteMenuItemAction from Firestore (server-side): ', e); // Detailed server-side log
     const errorMessage = formatFirebaseError(e, 'An unknown error occurred while deleting the menu item from Firestore.');
     return { success: false, error: errorMessage };
   }
