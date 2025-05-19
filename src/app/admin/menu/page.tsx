@@ -81,21 +81,33 @@ export default function MenuManagementPage() {
         if (result.success) {
           toast({ title: "Success", description: "Menu item updated." });
         } else {
-          throw new Error(result.error || "Failed to update menu item.");
+          console.error("updateMenuItemAction failed. Result:", result);
+          throw new Error(result.error || "Failed to update the menu item. Please try again.");
         }
       } else {
         result = await addMenuItemAction(data);
         if (result.success && result.menuItem) {
           toast({ title: "Success", description: "New menu item added." });
         } else {
-          throw new Error(result.error || "Failed to add menu item.");
+          console.error("addMenuItemAction failed. Result:", result);
+          throw new Error(result.error || "Failed to add the new menu item. Please try again.");
         }
       }
-      await loadMenuItems();
+      await loadMenuItems(); // Refresh the list
       setIsFormOpen(false);
       setEditingItem(null);
     } catch (error) {
-      toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
+      console.error("Error submitting menu item form:", error);
+      let descriptionMessage = "An unexpected error occurred while saving the menu item.";
+      if (error instanceof Error && error.message) {
+        descriptionMessage = error.message;
+      }
+      toast({
+        title: "Menu Item Error",
+        description: descriptionMessage,
+        variant: "destructive",
+        duration: 7000,
+      });
     } finally {
       setIsDialogSubmitting(false);
     }
@@ -126,7 +138,12 @@ export default function MenuManagementPage() {
         throw new Error(result.error || "Failed to delete menu item.");
       }
     } catch (error) {
-      toast({ title: "Error deleting item", description: (error as Error).message, variant: "destructive" });
+      console.error("Error deleting menu item:", error);
+      let descriptionMessage = "An unexpected error occurred while deleting the menu item.";
+      if (error instanceof Error && error.message) {
+        descriptionMessage = error.message;
+      }
+      toast({ title: "Error Deleting Item", description: descriptionMessage, variant: "destructive" });
     } finally {
       setIsDialogSubmitting(false);
       setIsDeleteDialogOpen(false);
@@ -269,3 +286,4 @@ export default function MenuManagementPage() {
     </div>
   );
 }
+
