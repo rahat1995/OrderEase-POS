@@ -44,8 +44,9 @@ interface MenuItemFormProps {
 export default function MenuItemForm({ initialData, onSubmit, isSubmitting: isParentSubmitting, onCancel }: MenuItemFormProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(initialData?.imageUrl || null);
-  const [isUploading, setIsUploading] = useState(false); // Internal submitting state for image upload + form submission
+  // Store the original image URL from initialData to compare if it changes
   const [currentImageUrl, setCurrentImageUrl] = useState<string | undefined>(initialData?.imageUrl);
+
 
   const form = useForm<MenuItemFormData>({
     resolver: zodResolver(menuItemFormSchema),
@@ -64,7 +65,7 @@ export default function MenuItemForm({ initialData, onSubmit, isSubmitting: isPa
     });
     setImagePreview(initialData?.imageUrl || null);
     setCurrentImageUrl(initialData?.imageUrl);
-    setSelectedFile(null); // Clear selected file when initialData changes
+    setSelectedFile(null); // Clear selected file when initialData changes or form is reset
   }, [initialData, form]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -77,24 +78,26 @@ export default function MenuItemForm({ initialData, onSubmit, isSubmitting: isPa
       };
       reader.readAsDataURL(file);
     } else {
+      // If file selection is cancelled, revert to the original image or null
       setSelectedFile(null);
-      setImagePreview(initialData?.imageUrl || null);
+      setImagePreview(currentImageUrl || null);
     }
   };
 
   const removeImage = () => {
     setSelectedFile(null);
-    setImagePreview(null);
+    setImagePreview(null); // This indicates user wants to remove/not use an image
   };
 
   const internalFormSubmit: SubmitHandler<MenuItemFormData> = async (data) => {
     setIsUploading(true);
-    let finalImageUrl = currentImageUrl;
+    let finalImageUrl: string | undefined = currentImageUrl;
 
     try {
-      if (selectedFile) {
-        if (initialData && initialData.id && currentImageUrl && currentImageUrl !== imagePreview && currentImageUrl.includes('firebasestorage.googleapis.com')) {
-          await deleteImageAction(currentImageUrl);
+      if (selectedFile) { // Case 1: A new file is selected
+        // If there was an old image stored in Firebase, delete it before uploading new one
+        if (initialData?.imageUrl && initialData.imageUrl.includes('firebasestorage.googleapis.com')) {
+          await deleteImageAction(initialData.imageUrl);
         }
 
         const formDataForUpload = new FormData();
@@ -106,16 +109,21 @@ export default function MenuItemForm({ initialData, onSubmit, isSubmitting: isPa
         } else {
           throw new Error(uploadResult.error || "Image upload failed.");
         }
-      } else if (!imagePreview && initialData && initialData.imageUrl && initialData.imageUrl.includes('firebasestorage.googleapis.com')) {
-        // Image was removed by user (imagePreview is null), and there was an initial image from Firebase Storage.
+      } else if (!imagePreview && initialData?.imageUrl && initialData.imageUrl.includes('firebasestorage.googleapis.com')) {
+        // Case 2: No new file selected, AND existing image was explicitly removed (imagePreview is null)
+        // AND there was an initial image from Firebase Storage.
         await deleteImageAction(initialData.imageUrl);
-        finalImageUrl = `https://placehold.co/300x200.png?text=${encodeURIComponent(data.name || 'Item Removed')}`;
+        finalImageUrl = undefined; // Mark to use placeholder
       }
-
+      // Case 3: No new file selected, and existing image (if any) is kept.
+      // `finalImageUrl` initially holds `currentImageUrl`. If it was a placeholder or user didn't change it, it remains.
+      // If `currentImageUrl` was undefined (new item), `finalImageUrl` is still undefined here.
 
       const submitData: CreateMenuItemInput = {
         ...data,
         price: Number(data.price),
+        // If finalImageUrl is defined (from upload or kept existing), use it.
+        // Otherwise (new item no upload, or existing image removed), use a placeholder.
         imageUrl: finalImageUrl || `https://placehold.co/300x200.png?text=${encodeURIComponent(data.name || 'Item')}`,
         dataAiHint: data.dataAiHint || '',
       };
@@ -164,7 +172,7 @@ export default function MenuItemForm({ initialData, onSubmit, isSubmitting: isPa
             />
             
             <FormItem>
-              <FormLabel>Image</FormLabel>
+              <FormLabel>Image (Optional)</FormLabel>
               <FormControl>
                 <Input 
                   type="file" 
@@ -176,7 +184,9 @@ export default function MenuItemForm({ initialData, onSubmit, isSubmitting: isPa
               </FormControl>
               {imagePreview && (
                 <div className="mt-2 relative w-48 h-32 border rounded-md overflow-hidden group">
-                  <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                  <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" 
+                       onError={(e) => (e.currentTarget.src = `https://placehold.co/300x200.png?text=Error`)}
+                  />
                   <Button 
                     type="button" 
                     variant="ghost" 
@@ -221,7 +231,7 @@ export default function MenuItemForm({ initialData, onSubmit, isSubmitting: isPa
                 Cancel
               </Button>
             )}
-            <Button type="submit" disabled={combinedSubmitting} className="bg-accent hover:bg-accent/90">
+            <Button type="submit" disabled={combinedSubmitting || !form.formState.isValid } className="bg-accent hover:bg-accent/90">
               {combinedSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (initialData ? null : <UploadCloud className="mr-2 h-4 w-4" />) }
               {isUploading ? 'Processing...' : (initialData ? 'Save Changes' : 'Add Item')}
             </Button>
@@ -231,3 +241,5 @@ export default function MenuItemForm({ initialData, onSubmit, isSubmitting: isPa
     </Card>
   );
 }
+
+    
