@@ -30,7 +30,7 @@ import { format } from 'date-fns';
 
 export default function SupplierPaymentsPage() {
   const [suppliersWithBalances, setSuppliersWithBalances] = useState<SupplierBalance[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // Start true for initial load
   const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
   const [selectedSupplierForPayment, setSelectedSupplierForPayment] = useState<SupplierBalance | null>(null);
   
@@ -45,6 +45,9 @@ export default function SupplierPaymentsPage() {
     try {
       const data = await fetchSuppliersWithBalancesAction();
       setSuppliersWithBalances(data);
+      if (data.length === 0) {
+        toast({ title: "No Suppliers Found", description: "Please add suppliers in Cost Management first."});
+      }
     } catch (error) {
       toast({ title: "Error loading supplier balances", description: (error as Error).message, variant: "destructive" });
     } finally {
@@ -110,15 +113,20 @@ export default function SupplierPaymentsPage() {
       </PageCardHeader>
 
       <Card className="shadow-xl">
-        <CardContent className={suppliersWithBalances.length === 0 ? "pt-6" : "p-0"}>
-          {isLoading && suppliersWithBalances.length > 0 && <div className="text-center py-4"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" /> Refreshing...</div>}
+        <CardContent className={(isLoading && suppliersWithBalances.length > 0) || (!isLoading && suppliersWithBalances.length === 0) ? "pt-6" : "p-0"}>
+          {isLoading && suppliersWithBalances.length > 0 && (
+            <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" /> 
+                <p className="ml-2 text-muted-foreground">Refreshing supplier balances...</p>
+            </div>
+          )}
           {!isLoading && suppliersWithBalances.length === 0 ? (
              <div className="text-center py-10 text-muted-foreground">
                 <Users className="mx-auto h-16 w-16 mb-4" />
                 <p className="text-lg font-medium">No suppliers found.</p>
                 <p className="text-sm">Add suppliers in the Cost Management section first.</p>
             </div>
-          ) : (
+          ) : !isLoading && suppliersWithBalances.length > 0 ? (
             <ScrollArea className="h-[calc(100vh-300px)]">
               <Table>
                 <TableHeader className="sticky top-0 bg-muted z-10">
@@ -158,7 +166,7 @@ export default function SupplierPaymentsPage() {
                 </TableBody>
               </Table>
             </ScrollArea>
-          )}
+          ) : null}
         </CardContent>
       </Card>
 

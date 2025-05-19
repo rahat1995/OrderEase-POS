@@ -36,18 +36,24 @@ export default function SupplierDueReportClient() {
   const [reportDataAll, setReportDataAll] = useState<SupplierPeriodicSummary[]>([]);
   const [reportDataIndividual, setReportDataIndividual] = useState<SupplierLedgerData | null>(null);
   
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // Start true for initial load
   const [error, setError] = useState<string | null>(null);
   const [initialSuppliersLoaded, setInitialSuppliersLoaded] = useState(false);
 
 
   const loadSuppliers = useCallback(async () => {
+    setIsLoading(true); // Ensure loading is true when starting to load suppliers
+    setError(null);
     try {
       const data = await fetchSuppliersAction();
       setSuppliersList(data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load suppliers');
-      toast({ title: "Error loading suppliers", description: e instanceof Error ? e.message : 'Unknown error', variant: "destructive" });
+      const msg = e instanceof Error ? e.message : 'Failed to load suppliers';
+      setError(msg);
+      toast({ title: "Error loading suppliers", description: msg, variant: "destructive" });
+    } finally {
+      setInitialSuppliersLoaded(true);
+      // setIsLoading(false); // Loading will be set to false after search completes
     }
   }, []);
 
@@ -62,7 +68,7 @@ export default function SupplierDueReportClient() {
 
     try {
       if (selectedSupplierId === ALL_SUPPLIERS_VALUE) {
-        if (suppliersList.length === 0) {
+        if (suppliersList.length === 0 && initialSuppliersLoaded) { // Check if suppliers were loaded but list is empty
             toast({ title: "No Suppliers", description: "Please add suppliers first to see this report." });
             setIsLoading(false);
             return;
@@ -94,24 +100,19 @@ export default function SupplierDueReportClient() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedSupplierId, dateRange, suppliersList]);
+  }, [selectedSupplierId, dateRange, suppliersList, initialSuppliersLoaded]);
 
-  // Effect to load suppliers once on mount
+
   useEffect(() => {
-    setIsLoading(true);
-    loadSuppliers().finally(() => {
-      setInitialSuppliersLoaded(true);
-      // isLoading will be set to false by the subsequent handleSearch call or if handleSearch isn't called
-    });
+    loadSuppliers();
   }, [loadSuppliers]);
 
-  // Effect to run search when filters change or after initial suppliers are loaded
+
   useEffect(() => {
     if (initialSuppliersLoaded) {
       handleSearch();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialSuppliersLoaded, selectedSupplierId, dateRange, handleSearch]); // handleSearch is memoized
+  }, [initialSuppliersLoaded, selectedSupplierId, dateRange, handleSearch]); 
 
   const grandTotalsAll = useMemo(() => reportDataAll.reduce(
     (acc, curr) => {
@@ -130,7 +131,7 @@ export default function SupplierDueReportClient() {
     return reportDataIndividual.transactions.map(tx => {
       if (tx.type === 'purchase') {
         currentBalance += tx.amount;
-      } else { // payment
+      } else { 
         currentBalance -= tx.amount;
       }
       return { ...tx, runningBalance: currentBalance };
@@ -163,7 +164,7 @@ export default function SupplierDueReportClient() {
             </div>
             <div>
               <label htmlFor="supplier-select" className="text-sm font-medium block mb-1 flex items-center"><Users2 className="mr-1.5 h-4 w-4 text-muted-foreground"/>Supplier</label>
-              <Select value={selectedSupplierId} onValueChange={setSelectedSupplierId} disabled={isLoading || suppliersList.length === 0}>
+              <Select value={selectedSupplierId} onValueChange={setSelectedSupplierId} disabled={isLoading || !initialSuppliersLoaded || suppliersList.length === 0}>
                 <SelectTrigger id="supplier-select"><SelectValue placeholder="Select Supplier" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={ALL_SUPPLIERS_VALUE}>All Suppliers</SelectItem>
@@ -171,7 +172,7 @@ export default function SupplierDueReportClient() {
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={handleSearch} disabled={isLoading} className="w-full md:w-auto bg-accent hover:bg-accent/90 self-end">
+            <Button onClick={handleSearch} disabled={isLoading || !initialSuppliersLoaded} className="w-full md:w-auto bg-accent hover:bg-accent/90 self-end">
               {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
               Search Dues
             </Button>
@@ -181,7 +182,22 @@ export default function SupplierDueReportClient() {
 
       {error && <Alert variant="destructive"><AlertTriangle className="h-5 w-5"/><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
       
-      {isLoading && <div className="flex justify-center py-10"><Loader2 className="h-10 w-10 animate-spin text-primary" /><p className="ml-3 text-lg">Loading report...</p></div>}
+      {isLoading && (
+        <div className="flex justify-center items-center py-10 h-60">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+          <p className="ml-4 text-lg text-muted-foreground">Loading report data...</p>
+        </div>
+      )}
+
+      {!isLoading && !error && initialSuppliersLoaded && reportDataAll.length === 0 && !reportDataIndividual && (
+        <Card className="shadow-md">
+           <CardContent className="text-center py-10 text-muted-foreground">
+            <Search className="mx-auto h-12 w-12 mb-4" />
+            <p>No supplier due data found for the selected criteria.</p>
+            <p className="text-sm">Try adjusting filters or ensure bills and payments are recorded.</p>
+          </CardContent>
+        </Card>
+      )}
 
       {!isLoading && selectedSupplierId === ALL_SUPPLIERS_VALUE && reportDataAll.length > 0 && (
         <Card>
@@ -286,21 +302,13 @@ export default function SupplierDueReportClient() {
         </Card>
       )}
       
-      {!isLoading && !error && !initialSuppliersLoaded && (
-         <div className="flex justify-center py-10 text-muted-foreground">
-            <Loader2 className="mx-auto h-8 w-8 animate-spin mb-4" />
-            <p>Loading initial supplier data...</p>
+      {!isLoading && !error && !initialSuppliersLoaded && suppliersList.length === 0 && (
+         <div className="flex justify-center items-center py-10 h-60">
+            <Loader2 className="mx-auto h-8 w-8 animate-spin mb-4 text-primary" />
+            <p className="ml-3 text-muted-foreground">Loading initial supplier data...</p>
         </div>
       )}
 
-      {!isLoading && !error && initialSuppliersLoaded && reportDataAll.length === 0 && !reportDataIndividual && (
-        <div className="text-center py-10 text-muted-foreground">
-            <Search className="mx-auto h-12 w-12 mb-4" />
-            <p>No supplier due data found for the selected criteria.</p>
-            <p className="text-sm">Try adjusting filters or ensure bills and payments are recorded.</p>
-        </div>
-      )}
     </div>
   );
 }
-

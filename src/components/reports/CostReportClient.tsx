@@ -33,16 +33,17 @@ export default function CostReportClient() {
   });
   const [costEntries, setCostEntries] = useState<CostEntry[]>([]);
   const [aggregatedCosts, setAggregatedCosts] = useState<AggregatedCost[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // Start with true for initial load
   const [error, setError] = useState<string | null>(null);
 
   const [costCategories, setCostCategories] = useState<CostCategory[]>([]);
   const [purchaseItems, setPurchaseItems] = useState<PurchaseItem[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
-  const [selectedPurchaseItemId, setSelectedPurchaseItemId] = useState<string>('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(ALL_CATEGORIES_VALUE);
+  const [selectedPurchaseItemId, setSelectedPurchaseItemId] = useState<string>(ALL_ITEMS_VALUE);
+  const [isLoadingFilters, setIsLoadingFilters] = useState(true);
 
   const filteredPurchaseItems = useMemo(() => {
-    if (!selectedCategoryId) {
+    if (selectedCategoryId === ALL_CATEGORIES_VALUE) {
       return purchaseItems;
     }
     return purchaseItems.filter(item => item.categoryId === selectedCategoryId);
@@ -64,7 +65,7 @@ export default function CostReportClient() {
   }, []);
 
   const loadInitialFiltersData = useCallback(async () => {
-    setIsLoading(true);
+    setIsLoadingFilters(true);
     try {
       const [categories, items] = await Promise.all([
         fetchCostCategoriesAction(),
@@ -77,7 +78,7 @@ export default function CostReportClient() {
       setError(errorMessage);
       toast({ title: "Error Loading Filters", description: errorMessage, variant: "destructive" });
     } finally {
-      setIsLoading(false);
+      setIsLoadingFilters(false);
     }
   }, []);
 
@@ -86,11 +87,15 @@ export default function CostReportClient() {
     currentCategoryId: string,
     currentPurchaseItemId: string
   ) => {
+    const categoryIdToFetch = currentCategoryId === ALL_CATEGORIES_VALUE ? "" : currentCategoryId;
+    const purchaseItemIdToFetch = currentPurchaseItemId === ALL_ITEMS_VALUE ? "" : currentPurchaseItemId;
+    
     if (!currentDateRange.from) {
         toast({ title: "Date Required", description: "Please select a start date for the report.", variant: "destructive"});
         setCostEntries([]);
         setAggregatedCosts([]);
         setError("Start date is required.");
+        setIsLoading(false); // Ensure loading stops if guard fails
         return;
     }
     setIsLoading(true);
@@ -102,13 +107,12 @@ export default function CostReportClient() {
       const fetchedEntries = await fetchCostEntriesAction(
         currentDateRange.from ? format(currentDateRange.from, 'yyyy-MM-dd') : undefined,
         currentDateRange.to ? format(currentDateRange.to, 'yyyy-MM-dd') : undefined,
-        currentCategoryId || undefined,
-        currentPurchaseItemId || undefined
+        categoryIdToFetch || undefined,
+        purchaseItemIdToFetch || undefined
       );
-      // Sort entries by date descending for the detailed view
       const sortedEntries = fetchedEntries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       setCostEntries(sortedEntries);
-      setAggregatedCosts(aggregateCostsByCategory(fetchedEntries)); // Aggregation uses unsorted, which is fine
+      setAggregatedCosts(aggregateCostsByCategory(fetchedEntries));
 
       if (fetchedEntries.length === 0) {
         toast({ title: "No Cost Entries Found", description: "No costs recorded for the selected criteria." });
@@ -126,21 +130,44 @@ export default function CostReportClient() {
   }, [aggregateCostsByCategory]);
 
   useEffect(() => {
-    loadInitialFiltersData().then(() => {
-        if (dateRange.from) {
-             fetchCosts(dateRange, selectedCategoryId, selectedPurchaseItemId);
-        }
-    });
+    loadInitialFiltersData();
+  }, [loadInitialFiltersData]);
+  
+  useEffect(() => {
+    if (!isLoadingFilters && dateRange.from) {
+      fetchCosts(dateRange, selectedCategoryId, selectedPurchaseItemId);
+    } else if (!dateRange.from) {
+      setIsLoading(false); // Not loading if no date
+      setCostEntries([]);
+      setAggregatedCosts([]);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isLoadingFilters, dateRange, selectedCategoryId, selectedPurchaseItemId, fetchCosts]); // fetchCosts is stable
 
   const handleSearch = () => {
-    fetchCosts(dateRange, selectedCategoryId, selectedPurchaseItemId);
+    // fetchCosts is called by useEffect when dependencies change
+    // This explicit search button can be kept if desired for manual refresh
+    // or removed if useEffect-driven updates are sufficient.
+    // For now, we'll rely on useEffect. If manual is desired, call:
+    if (dateRange.from) {
+        fetchCosts(dateRange, selectedCategoryId, selectedPurchaseItemId);
+    } else {
+        toast({ title: "Date Required", description: "Please select a start date for the report.", variant: "destructive"});
+    }
   }
 
   const totalOverallCost = aggregatedCosts.reduce((sum, cat) => sum + cat.totalAmount, 0);
   const totalDetailedEntriesCost = costEntries.reduce((sum, entry) => sum + entry.amount, 0);
 
+
+  if (isLoadingFilters) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="ml-4 text-lg">Loading filters...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -200,10 +227,10 @@ export default function CostReportClient() {
                 <Tag className="mr-1.5 h-4 w-4 text-muted-foreground" /> Cost Category
               </label>
               <Select
-                value={selectedCategoryId || ALL_CATEGORIES_VALUE} // Ensure value matches an option
+                value={selectedCategoryId} 
                 onValueChange={(value) => {
-                  setSelectedCategoryId(value === ALL_CATEGORIES_VALUE ? "" : value);
-                  setSelectedPurchaseItemId('');
+                  setSelectedCategoryId(value);
+                  setSelectedPurchaseItemId(ALL_ITEMS_VALUE); 
                 }}
                 disabled={isLoading || costCategories.length === 0}
               >
@@ -224,9 +251,9 @@ export default function CostReportClient() {
                  <Package className="mr-1.5 h-4 w-4 text-muted-foreground" /> Purchase Item
               </label>
               <Select
-                value={selectedPurchaseItemId || ALL_ITEMS_VALUE} // Ensure value matches an option
+                value={selectedPurchaseItemId} 
                 onValueChange={(value) => {
-                  setSelectedPurchaseItemId(value === ALL_ITEMS_VALUE ? "" : value);
+                  setSelectedPurchaseItemId(value);
                 }}
                 disabled={isLoading || filteredPurchaseItems.length === 0}
               >
@@ -235,7 +262,7 @@ export default function CostReportClient() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={ALL_ITEMS_VALUE}>
-                    {selectedCategoryId ? "All Items in Category" : "All Items"}
+                    {selectedCategoryId === ALL_CATEGORIES_VALUE ? "All Items" : "All Items in Category"}
                   </SelectItem>
                   {filteredPurchaseItems.map(item => (
                     <SelectItem key={item.id} value={item.id}>
@@ -261,56 +288,61 @@ export default function CostReportClient() {
         </Alert>
       )}
 
-      <Card className="shadow-md">
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <BarChartHorizontalBig className="mr-2 h-6 w-6 text-accent" />
-            Category-wise Cost Summary
-          </CardTitle>
-          <CardDescription>Total expenses grouped by category for the selected criteria.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading && aggregatedCosts.length === 0 && costEntries.length === 0 ? (
-             <div className="text-center py-10">
-              <Loader2 className="mx-auto h-10 w-10 animate-spin text-primary" />
-              <p className="mt-2 text-muted-foreground">Loading cost report...</p>
-            </div>
-          ) : !isLoading && aggregatedCosts.length === 0 && costEntries.length === 0 && !error ? (
-            <div className="text-center py-10 text-muted-foreground">
-                <Search className="mx-auto h-12 w-12 mb-2" />
-                <p>No cost entries found for the selected criteria.</p>
-            </div>
-          ) : aggregatedCosts.length > 0 ? (
-            <>
-              <ScrollArea className="h-auto max-h-[250px] w-full border rounded-md mb-4">
-                <Table>
-                  <TableHeader className="sticky top-0 bg-muted z-10">
-                    <TableRow>
-                      <TableHead>Category Name</TableHead>
-                      <TableHead className="text-right">Number of Entries</TableHead>
-                      <TableHead className="text-right">Total Amount</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {aggregatedCosts.map((agg) => (
-                      <TableRow key={agg.categoryName}>
-                        <TableCell className="font-medium">{agg.categoryName}</TableCell>
-                        <TableCell className="text-right">{agg.entryCount}</TableCell>
-                        <TableCell className="text-right font-semibold text-destructive">${agg.totalAmount.toFixed(2)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
-              <div className="text-right mt-4">
-                <p className="text-lg font-bold">Overall Total (Summary): <span className="text-destructive">${totalOverallCost.toFixed(2)}</span></p>
-              </div>
-            </>
-          ) : null }
-        </CardContent>
-      </Card>
+      {isLoading && (
+         <div className="flex items-center justify-center h-40">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+          <p className="ml-4 text-lg">Loading cost data...</p>
+        </div>
+      )}
 
-      {costEntries.length > 0 && (
+      {!isLoading && !error && aggregatedCosts.length === 0 && costEntries.length === 0 && (
+        <Card className="shadow-md">
+          <CardContent className="text-center py-10 text-muted-foreground">
+            <Search className="mx-auto h-12 w-12 mb-2" />
+            <p>No cost entries found for the selected criteria.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {!isLoading && aggregatedCosts.length > 0 && (
+        <Card className="shadow-md">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <BarChartHorizontalBig className="mr-2 h-6 w-6 text-accent" />
+              Category-wise Cost Summary
+            </CardTitle>
+            <CardDescription>Total expenses grouped by category for the selected criteria.</CardDescription>
+          </CardHeader>
+          <CardContent>
+                <ScrollArea className="h-auto max-h-[250px] w-full border rounded-md mb-4">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-muted z-10">
+                      <TableRow>
+                        <TableHead>Category Name</TableHead>
+                        <TableHead className="text-right">Number of Entries</TableHead>
+                        <TableHead className="text-right">Total Amount</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {aggregatedCosts.map((agg) => (
+                        <TableRow key={agg.categoryName}>
+                          <TableCell className="font-medium">{agg.categoryName}</TableCell>
+                          <TableCell className="text-right">{agg.entryCount}</TableCell>
+                          <TableCell className="text-right font-semibold text-destructive">${agg.totalAmount.toFixed(2)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+                <div className="text-right mt-4">
+                  <p className="text-lg font-bold">Overall Total (Summary): <span className="text-destructive">${totalOverallCost.toFixed(2)}</span></p>
+                </div>
+          </CardContent>
+        </Card>
+      )}
+
+
+      {!isLoading && costEntries.length > 0 && (
         <Card className="shadow-md">
             <CardHeader>
                 <CardTitle className="flex items-center">
