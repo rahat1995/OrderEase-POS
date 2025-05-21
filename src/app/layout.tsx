@@ -18,10 +18,13 @@ import {
   TrendingUp,
   PieChart,
   Users,
-  WifiOff, // Icon for offline
+  WifiOff,
+  RefreshCw // Icon for Sync
 } from 'lucide-react';
-import { useOnlineStatus } from '@/hooks/useOnlineStatus'; // Import the new hook
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { cn } from '@/lib/utils';
+import { clearAllAppCache } from '@/lib/cache'; // Import cache utility
+import { toast } from '@/hooks/use-toast'; // Import toast
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -39,6 +42,26 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   const isOnline = useOnlineStatus();
+
+  const handleSyncData = () => {
+    if (isOnline) {
+      clearAllAppCache();
+      toast({
+        title: "Local Cache Cleared",
+        description: "Reloading to fetch fresh data...",
+      });
+      // Wait a bit for the toast to be visible before reloading
+      setTimeout(() => {
+        window.location.reload(true); // Force a hard reload
+      }, 1500);
+    } else {
+      toast({
+        title: "Cannot Sync",
+        description: "You are currently offline.",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <html lang="en">
@@ -63,7 +86,7 @@ export default function RootLayout({
                   OrderEase POS
                 </a>
               </Link>
-              <div className="space-x-1 flex-wrap">
+              <div className="space-x-1 flex items-center flex-wrap">
                 {/* Sales Management */}
                 <Button asChild variant="ghost" size="sm">
                   <Link href="/">
@@ -113,6 +136,11 @@ export default function RootLayout({
                   <Link href="/reports/profit-loss">
                     <PieChart className="mr-1.5 h-4 w-4" /> Profit & Loss
                   </Link>
+                </Button>
+                
+                {/* Sync Button */}
+                <Button variant="outline" size="sm" onClick={handleSyncData} title="Sync Data">
+                  <RefreshCw className="mr-1.5 h-4 w-4" /> Sync
                 </Button>
               </div>
             </nav>

@@ -6,11 +6,11 @@ interface CachedItem<T> {
   value: T;
 }
 
-const CACHE_PREFIX = 'app_cache_';
+const CACHE_PREFIX = 'app_cache_'; // Added prefix
 
 export function setCachedData<T>(key: string, data: T, ttlMinutes: number): void {
   if (typeof window !== 'undefined' && window.localStorage) {
-    const fullKey = CACHE_PREFIX + key;
+    const fullKey = CACHE_PREFIX + key; // Use prefix
     const expiry = new Date().getTime() + ttlMinutes * 60 * 1000;
     const item: CachedItem<T> = { value: data, expiry };
     try {
@@ -25,7 +25,7 @@ export function setCachedData<T>(key: string, data: T, ttlMinutes: number): void
 
 export function getCachedData<T>(key: string): T | null {
   if (typeof window !== 'undefined' && window.localStorage) {
-    const fullKey = CACHE_PREFIX + key;
+    const fullKey = CACHE_PREFIX + key; // Use prefix
     try {
       const itemStr = window.localStorage.getItem(fullKey);
       if (!itemStr) {
@@ -54,7 +54,7 @@ export function getCachedData<T>(key: string): T | null {
 
 export function removeCachedData(key: string): void {
   if (typeof window !== 'undefined' && window.localStorage) {
-    const fullKey = CACHE_PREFIX + key;
+    const fullKey = CACHE_PREFIX + key; // Use prefix
     try {
       window.localStorage.removeItem(fullKey);
     } catch (error) {
