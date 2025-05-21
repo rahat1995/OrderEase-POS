@@ -6,7 +6,7 @@ import React, { createContext, useContext, useState, useCallback } from 'react';
 import type { MenuItem, CartItem, Order, Voucher } from '@/types';
 import { toast } from "@/hooks/use-toast";
 import { saveOrderAction } from '@/app/actions/orderActions';
-import { validateVoucherAction } from '@/app/actions/voucherActions'; // New import
+import { validateVoucherAction } from '@/app/actions/voucherActions'; 
 
 interface OrderState {
   items: CartItem[];
@@ -15,6 +15,8 @@ interface OrderState {
   appliedVoucher: Voucher | null;
   voucherError: string | null;
   isVoucherLoading: boolean;
+  manualDiscountType: 'percentage' | 'fixed';
+  manualDiscountValue: number;
 }
 
 interface OrderContextType extends OrderState {
@@ -28,6 +30,8 @@ interface OrderContextType extends OrderState {
   getTotal: () => number;
   applyVoucher: (code: string) => Promise<void>;
   removeVoucher: () => void;
+  applyManualDiscount: (type: 'percentage' | 'fixed', value: number) => void;
+  removeManualDiscount: () => void;
   finalizeOrder: () => Promise<Order | null>;
   clearOrder: () => void;
 }
@@ -38,9 +42,16 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
   const [items, setItems] = useState<CartItem[]>([]);
   const [customerName, setCustomerName] = useState<string>('');
   const [customerMobile, setCustomerMobile] = useState<string>('');
+  
+  // Voucher state
   const [appliedVoucher, setAppliedVoucher] = useState<Voucher | null>(null);
   const [voucherError, setVoucherError] = useState<string | null>(null);
   const [isVoucherLoading, setIsVoucherLoading] = useState(false);
+
+  // Manual discount state
+  const [manualDiscountType, setManualDiscountType] = useState<'percentage' | 'fixed'>('fixed');
+  const [manualDiscountValue, setManualDiscountValue] = useState<number>(0);
+
 
   const addItem = useCallback((item: MenuItem) => {
     try {
@@ -112,6 +123,15 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [items]);
 
+  const removeManualDiscount = useCallback(() => {
+    try {
+      setManualDiscountType('fixed');
+      setManualDiscountValue(0);
+    } catch (e) {
+      console.error("OrderContext: Error in removeManualDiscount", e);
+    }
+  }, []);
+
   const applyVoucher = useCallback(async (code: string) => {
     try {
       if (!code.trim()) {
@@ -125,6 +145,7 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
       const result = await validateVoucherAction(code, subtotal);
       if (result.success && result.voucher) {
         setAppliedVoucher(result.voucher);
+        removeManualDiscount(); // Clear manual discount if voucher is applied
         toast({ title: "Voucher Applied", description: `Discount for "${result.voucher.code}" applied.` });
       } else {
         setAppliedVoucher(null);
@@ -139,7 +160,7 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
     } finally {
         setIsVoucherLoading(false);
     }
-  }, [getSubtotal]);
+  }, [getSubtotal, removeManualDiscount]);
 
   const removeVoucher = useCallback(() => {
     try {
@@ -151,30 +172,61 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
+  const applyManualDiscount = useCallback((type: 'percentage' | 'fixed', value: number) => {
+    try {
+      if (value < 0) {
+        toast({ title: "Invalid Discount", description: "Discount value cannot be negative.", variant: "destructive" });
+        return;
+      }
+      if (type === 'percentage' && value > 100) {
+        toast({ title: "Invalid Discount", description: "Percentage discount cannot exceed 100%.", variant: "destructive" });
+        return;
+      }
+      setManualDiscountType(type);
+      setManualDiscountValue(value);
+      setAppliedVoucher(null); // Clear voucher if manual discount is applied
+      setVoucherError(null);
+      toast({ title: "Manual Discount Applied", description: `${value}${type === 'percentage' ? '%' : '$'} discount applied.` });
+    } catch (e) {
+      console.error("OrderContext: Error in applyManualDiscount", e);
+      toast({ title: "Discount Error", description: "Could not apply manual discount.", variant: "destructive" });
+    }
+  }, []);
+
+
   const getDiscountAmount = useCallback((): number => {
     try {
-      if (!appliedVoucher) return 0;
       const subtotal = getSubtotal();
       let calculatedDiscount = 0;
-      if (appliedVoucher.discountType === 'percentage') {
-        calculatedDiscount = subtotal * (appliedVoucher.discountValue / 100);
-      } else {
-        calculatedDiscount = appliedVoucher.discountValue;
+
+      if (appliedVoucher) {
+        if (appliedVoucher.discountType === 'percentage') {
+          calculatedDiscount = subtotal * (appliedVoucher.discountValue / 100);
+        } else {
+          calculatedDiscount = appliedVoucher.discountValue;
+        }
+      } else if (manualDiscountValue > 0) {
+        if (manualDiscountType === 'percentage') {
+          calculatedDiscount = subtotal * (manualDiscountValue / 100);
+        } else {
+          calculatedDiscount = manualDiscountValue;
+        }
       }
+      
       calculatedDiscount = Math.max(0, calculatedDiscount); 
-      return Math.min(calculatedDiscount, subtotal); // Discount cannot exceed subtotal
+      return Math.min(calculatedDiscount, subtotal); 
     } catch (e) {
       console.error("OrderContext: Error in getDiscountAmount", e);
       return 0;
     }
-  }, [getSubtotal, appliedVoucher]);
+  }, [getSubtotal, appliedVoucher, manualDiscountType, manualDiscountValue]);
 
   const getTotal = useCallback((): number => {
     try {
       return getSubtotal() - getDiscountAmount();
     } catch (e) {
       console.error("OrderContext: Error in getTotal", e);
-      return getSubtotal(); // Fallback to subtotal if discount calculation fails
+      return getSubtotal(); 
     }
   }, [getSubtotal, getDiscountAmount]);
 
@@ -183,19 +235,20 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
       setItems([]);
       setAppliedVoucher(null);
       setVoucherError(null);
+      removeManualDiscount();
       setCustomerName('');
       setCustomerMobile('');
       toast({ title: "Cart Cleared", description: "Ready for a new order." });
     } catch (e) {
       console.error("OrderContext: Error in clearOrder", e);
-      // Attempt to clear anyway
       setItems([]);
       setAppliedVoucher(null);
+      removeManualDiscount();
       setCustomerName('');
       setCustomerMobile('');
       toast({ title: "Cart Clearing Error", description: "Some items may not have cleared.", variant: "destructive" });
     }
-  }, []);
+  }, [removeManualDiscount]);
 
   const finalizeOrder = useCallback(async (): Promise<Order | null> => {
     if (items.length === 0) {
@@ -221,6 +274,8 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
         orderDate: new Date().toISOString(),
         appliedVoucherCode: appliedVoucher?.code,
         voucherDiscountDetails: appliedVoucher ? { type: appliedVoucher.discountType, value: appliedVoucher.discountValue } : undefined,
+        manualDiscountType: !appliedVoucher && manualDiscountValue > 0 ? manualDiscountType : undefined,
+        manualDiscountValue: !appliedVoucher && manualDiscountValue > 0 ? manualDiscountValue : undefined,
       };
     
       toast({ title: "Saving Order...", description: `Token: ${token}. Please wait.`});
@@ -234,13 +289,13 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       console.error("OrderContext: Error saving order:", error);
       toast({ title: "Error Saving Order", description: (error instanceof Error ? error.message : "Unknown error") + " Check console for details.", variant: "destructive" });
-      if (orderData) { // If orderData was formed but saving failed
+      if (orderData) { 
         toast({ title: "Order Finalized (Locally)", description: `Token: ${orderData.token}. DB save failed. Preparing for print.` , variant: "destructive"});
         return orderData; 
       }
       return null;
     }
-  }, [items, getSubtotal, getDiscountAmount, getTotal, customerName, customerMobile, generateOrderToken, appliedVoucher]);
+  }, [items, getSubtotal, getDiscountAmount, getTotal, customerName, customerMobile, generateOrderToken, appliedVoucher, manualDiscountType, manualDiscountValue]);
 
 
   return (
@@ -252,6 +307,8 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
         appliedVoucher,
         voucherError,
         isVoucherLoading,
+        manualDiscountType,
+        manualDiscountValue,
         addItem,
         removeItem,
         updateItemQuantity,
@@ -262,6 +319,8 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
         getTotal,
         applyVoucher,
         removeVoucher,
+        applyManualDiscount,
+        removeManualDiscount,
         finalizeOrder,
         clearOrder,
       }}
@@ -278,4 +337,3 @@ export const useOrder = (): OrderContextType => {
   }
   return context;
 };
-

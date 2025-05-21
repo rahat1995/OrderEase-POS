@@ -4,9 +4,7 @@
 import Image from 'next/image';
 import type { MenuItem } from '@/types';
 import { useOrder } from '@/contexts/OrderContext';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface MenuItemCardProps {
   item: MenuItem;
@@ -15,10 +13,21 @@ interface MenuItemCardProps {
 export default function MenuItemCard({ item }: MenuItemCardProps) {
   const { addItem } = useOrder();
 
+  const handleCardClick = () => {
+    addItem(item);
+  };
+
   return (
-    <Card className="flex flex-col overflow-hidden shadow-md hover:shadow-lg transition-shadow duration-200">
+    <Card 
+      className="flex flex-col overflow-hidden shadow-md hover:shadow-lg transition-shadow duration-200 cursor-pointer"
+      onClick={handleCardClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleCardClick();}}
+      aria-label={`Add ${item.name} to cart`}
+    >
       <CardHeader className="p-0">
-        <div className="aspect-square relative w-full"> {/* Changed to aspect-square for more compact vertical items */}
+        <div className="aspect-square relative w-full">
           <Image
             src={item.imageUrl}
             alt={item.name}
@@ -26,25 +35,19 @@ export default function MenuItemCard({ item }: MenuItemCardProps) {
             objectFit="cover"
             data-ai-hint={item.dataAiHint}
             sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, (max-width: 1280px) 16vw, (max-width: 1536px) 12.5vw, 10vw"
+            className="pointer-events-none" // Prevents image from capturing click if not needed
           />
         </div>
       </CardHeader>
-      <CardContent className="p-2 flex-grow"> {/* Reduced padding */}
-        <CardTitle className="text-xs font-medium mb-0.5 leading-tight h-8 overflow-hidden"> {/* Reduced font, mb, and set height for consistent 2 lines */}
+      <CardContent className="p-2 flex-grow flex flex-col justify-between"> {/* Reduced padding */}
+        <CardTitle 
+            className="text-xs font-medium leading-tight h-8 overflow-hidden text-ellipsis" // Adjusted for ~2 lines
+            title={item.name} // Full name on hover
+        > 
           {item.name}
         </CardTitle>
-        <p className="text-xs text-foreground/80 font-semibold">${item.price.toFixed(2)}</p>
+        <p className="text-xs text-foreground/80 font-semibold mt-0.5">${item.price.toFixed(2)}</p>
       </CardContent>
-      <CardFooter className="p-2 pt-0"> {/* Reduced padding */}
-        <Button 
-          onClick={() => addItem(item)} 
-          className="w-full bg-accent hover:bg-accent/90 text-accent-foreground h-8 text-xs px-2" /* Reduced height, text size, padding */
-          aria-label={`Add ${item.name} to cart`}
-          size="sm" 
-        >
-          <PlusCircle className="mr-1 h-3.5 w-3.5" /> Add {/* Reduced icon size and margin */}
-        </Button>
-      </CardFooter>
     </Card>
   );
 }

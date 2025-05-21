@@ -1,6 +1,6 @@
 
 export interface MenuItem {
-  id: string; // Firestore document ID
+  id: string; 
   name: string;
   price: number;
   imageUrl: string;
@@ -13,8 +13,8 @@ export interface CartItem extends MenuItem {
 
 export interface Voucher {
   id: string;
-  code: string; // User-facing voucher code
-  codeLower: string; // For case-insensitive lookup
+  code: string; 
+  codeLower: string; 
   description?: string;
   discountType: 'percentage' | 'fixed';
   discountValue: number;
@@ -22,35 +22,35 @@ export interface Voucher {
   validFrom?: string; // ISO string
   validUntil?: string; // ISO string
   isActive: boolean;
-  usageLimit?: number; // Max number of times this voucher can be used in total
-  timesUsed: number; // How many times it has been used
+  usageLimit?: number; 
+  timesUsed: number; 
   createdAt: string; // ISO string
 }
 export type CreateVoucherInput = Omit<Voucher, 'id' | 'codeLower' | 'timesUsed' | 'createdAt'>;
 
 export interface Order {
-  id: string; // Order ID / Firestore Document ID
+  id: string; 
   items: CartItem[];
   subtotal: number;
-  discountAmount: number; // Actual discount value applied
+  discountAmount: number; 
   total: number;
   customerName?: string;
   customerMobile?: string;
   orderDate: string; // ISO string
-  token: string; // User-facing token
-  appliedVoucherCode?: string; // Code of the voucher used
-  // Storing the discount details applied at the time of order, in case voucher changes later
+  token: string; 
+  appliedVoucherCode?: string; 
   voucherDiscountDetails?: { 
     type: 'percentage' | 'fixed';
     value: number;
   };
+  manualDiscountType?: 'percentage' | 'fixed';
+  manualDiscountValue?: number;
 }
 
 // Costing Module Types
 export interface CostCategory {
   id: string;
   name: string;
-  // nameLower: string; // Internal for uniqueness, not exposed in type
 }
 
 export type CreateCostCategoryInput = Omit<CostCategory, 'id'>;
@@ -58,9 +58,9 @@ export type CreateCostCategoryInput = Omit<CostCategory, 'id'>;
 export interface PurchaseItem {
   id: string;
   name: string;
-  code?: string; // Optional item code
+  code?: string; 
   categoryId: string;
-  categoryName: string; // Denormalized
+  categoryName: string; 
 }
 export type CreatePurchaseItemInput = Omit<PurchaseItem, 'id'>;
 
@@ -68,21 +68,20 @@ export interface Supplier {
   id: string;
   name: string;
   address?: string;
-  mobile?: string;
+  mobile: string | undefined;
   contactPerson?: string;
   email?: string;
-  // nameLower: string; // Internal for uniqueness, not exposed in type
 }
 export type CreateSupplierInput = Omit<Supplier, 'id'>;
 
 export interface PurchaseBill {
   id: string;
   billDate: string; // ISO string
-  supplierId?: string; // Link to Supplier collection
-  supplierName?: string; // Denormalized for easy display
+  supplierId?: string; 
+  supplierName?: string; 
   billNumber?: string;
   purchaseOrderNumber?: string;
-  totalAmount: number; // Sum of all cost entries in this bill
+  totalAmount: number; 
   createdAt: string; // ISO string, for record keeping
 }
 export type CreatePurchaseBillInput = Omit<PurchaseBill, 'id' | 'totalAmount' | 'createdAt'> & {
@@ -95,7 +94,7 @@ export interface CostEntry {
   purchaseBillId: string;
   purchaseItemId: string;
   purchaseItemName: string;
-  purchaseItemCode?: string; // Denormalized from PurchaseItem
+  purchaseItemCode?: string; 
   categoryId: string;
   categoryName: string;
   amount: number;
@@ -108,10 +107,10 @@ export type CreateCostEntryInput = Omit<CostEntry, 'id'>;
 export interface SupplierPayment {
   id: string;
   supplierId: string;
-  supplierName: string; // Denormalized
+  supplierName: string; 
   paymentDate: string; // ISO String
   amountPaid: number;
-  paymentMethod: string; // e.g., "Cash", "Bank Transfer", "Check"
+  paymentMethod: string; 
   notes?: string;
   createdAt: string; // ISO String
 }
@@ -138,7 +137,7 @@ export interface LedgerTransaction {
   date: string; // ISO string
   type: 'purchase' | 'payment';
   description: string;
-  amount: number; // Positive for purchase, positive for payment (sign handled by type)
+  amount: number; 
 }
 
 export interface SupplierLedgerData {
@@ -147,5 +146,5 @@ export interface SupplierLedgerData {
   transactions: LedgerTransaction[];
   totalPurchasesInPeriod: number;
   totalPaymentsInPeriod: number;
-  closingBalance: number; // This will be the last runningBalance
+  closingBalance: number; 
 }
