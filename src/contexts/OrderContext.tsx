@@ -3,10 +3,11 @@
 
 import type { ReactNode } from 'react';
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import type { MenuItem, CartItem, Order, Voucher } from '@/types';
+import type { MenuItem, CartItem, Order, Voucher, AppUser } from '@/types'; // Added AppUser
 import { toast } from "@/hooks/use-toast";
 import { saveOrderAction } from '@/app/actions/orderActions';
 import { validateVoucherAction } from '@/app/actions/voucherActions'; 
+// import { useAuth } from './AuthContext'; // Import useAuth if needed for createdBy
 
 interface OrderState {
   items: CartItem[];
@@ -32,23 +33,22 @@ interface OrderContextType extends OrderState {
   removeVoucher: () => void;
   applyManualDiscount: (type: 'percentage' | 'fixed', value: number) => void;
   removeManualDiscount: () => void;
-  finalizeOrder: () => Promise<Order | null>;
+  finalizeOrder: (currentUser?: AppUser | null) => Promise<Order | null>; // Pass current user
   clearOrder: () => void;
 }
 
 const OrderContext = createContext<OrderContextType | undefined>(undefined);
 
 export const OrderProvider = ({ children }: { children: ReactNode }) => {
+  // const { currentUser } = useAuth(); // Get current user from AuthContext if needed here
   const [items, setItems] = useState<CartItem[]>([]);
   const [customerName, setCustomerName] = useState<string>('');
   const [customerMobile, setCustomerMobile] = useState<string>('');
   
-  // Voucher state
   const [appliedVoucher, setAppliedVoucher] = useState<Voucher | null>(null);
   const [voucherError, setVoucherError] = useState<string | null>(null);
   const [isVoucherLoading, setIsVoucherLoading] = useState(false);
 
-  // Manual discount state
   const [manualDiscountType, setManualDiscountType] = useState<'percentage' | 'fixed'>('fixed');
   const [manualDiscountValue, setManualDiscountValue] = useState<number>(0);
 
@@ -145,7 +145,7 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
       const result = await validateVoucherAction(code, subtotal);
       if (result.success && result.voucher) {
         setAppliedVoucher(result.voucher);
-        removeManualDiscount(); // Clear manual discount if voucher is applied
+        removeManualDiscount(); 
         toast({ title: "Voucher Applied", description: `Discount for "${result.voucher.code}" applied.` });
       } else {
         setAppliedVoucher(null);
@@ -184,7 +184,7 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
       }
       setManualDiscountType(type);
       setManualDiscountValue(value);
-      setAppliedVoucher(null); // Clear voucher if manual discount is applied
+      setAppliedVoucher(null); 
       setVoucherError(null);
       toast({ title: "Manual Discount Applied", description: `${value}${type === 'percentage' ? '%' : '$'} discount applied.` });
     } catch (e) {
@@ -250,7 +250,7 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [removeManualDiscount]);
 
-  const finalizeOrder = useCallback(async (): Promise<Order | null> => {
+  const finalizeOrder = useCallback(async (currentUser?: AppUser | null): Promise<Order | null> => {
     if (items.length === 0) {
       toast({ title: "Cannot Finalize", description: "Cart is empty.", variant: "destructive" });
       return null;
@@ -276,6 +276,8 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
         voucherDiscountDetails: appliedVoucher ? { type: appliedVoucher.discountType, value: appliedVoucher.discountValue } : undefined,
         manualDiscountType: !appliedVoucher && manualDiscountValue > 0 ? manualDiscountType : undefined,
         manualDiscountValue: !appliedVoucher && manualDiscountValue > 0 ? manualDiscountValue : undefined,
+        createdByUid: currentUser?.uid,
+        createdByName: currentUser?.displayName || currentUser?.email,
       };
     
       toast({ title: "Saving Order...", description: `Token: ${token}. Please wait.`});

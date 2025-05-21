@@ -10,8 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Trash2, PlusCircle, MinusCircle, Printer, User, Phone, ShoppingCart, Loader2, Ticket, XCircle, Percent, DollarSign, Eraser } from 'lucide-react';
-import type { CartItem, Order, Voucher, RestaurantProfile, PrintRequestData } from '@/types'; 
+import type { CartItem, Order, Voucher, RestaurantProfile, PrintRequestData, AppUser } from '@/types'; 
 import { toast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext'; // Import useAuth
 
 interface OrderCartProps {
   onPrintRequest: (data: PrintRequestData) => void;
@@ -39,15 +40,15 @@ export default function OrderCart({ onPrintRequest, restaurantProfile }: OrderCa
     getDiscountAmount,
     getTotal,
     finalizeOrder,
-    clearOrder,
+    // clearOrder, // clearOrder is called by PosClientPage
   } = useOrder();
+  const { currentUser } = useAuth(); // Get current user from AuthContext
 
   const [currentVoucherCode, setCurrentVoucherCode] = useState('');
   const [currentCustomerName, setCurrentCustomerName] = useState(customerName);
   const [currentCustomerMobile, setCurrentCustomerMobile] = useState(customerMobile);
   const [isProcessingOrder, setIsProcessingOrder] = useState(false);
 
-  // State for manual discount inputs
   const [currentManualDiscountType, setCurrentManualDiscountType] = useState<'percentage' | 'fixed'>(manualDiscountType);
   const [currentManualDiscountValue, setCurrentManualDiscountValue] = useState<string>(manualDiscountValue > 0 ? manualDiscountValue.toString() : '');
 
@@ -68,8 +69,7 @@ export default function OrderCart({ onPrintRequest, restaurantProfile }: OrderCa
       return;
     }
     await applyVoucher(currentVoucherCode);
-    // If voucher applied successfully, context clears manual discount. Update local state:
-    if (appliedVoucher) { // Check appliedVoucher from context, not the local variable
+    if (appliedVoucher) { 
         setCurrentManualDiscountType('fixed');
         setCurrentManualDiscountValue('');
     }
@@ -77,7 +77,7 @@ export default function OrderCart({ onPrintRequest, restaurantProfile }: OrderCa
 
   const handleRemoveVoucher = () => {
     removeVoucher();
-    setCurrentVoucherCode(''); // Clear input field as well
+    setCurrentVoucherCode(''); 
   };
   
   const handleApplyManualDiscount = () => {
@@ -91,14 +91,11 @@ export default function OrderCart({ onPrintRequest, restaurantProfile }: OrderCa
         return;
     }
     applyManualDiscount(currentManualDiscountType, value);
-    // If manual discount applied, context clears voucher. Update local state:
     setCurrentVoucherCode('');
   };
 
   const handleRemoveManualDiscount = () => {
     removeManualDiscount();
-    // setCurrentManualDiscountType('fixed'); // Already handled in context
-    // setCurrentManualDiscountValue(''); // Already handled in context
   }
 
   const handleSetCustomerInfo = () => {
@@ -106,14 +103,18 @@ export default function OrderCart({ onPrintRequest, restaurantProfile }: OrderCa
   };
   
   const handleSaveAndPrint = async () => {
+    if (!currentUser) {
+      toast({title: "Login Required", description: "Please login to finalize the order.", variant: "destructive"});
+      // Optionally redirect to login: router.push('/login?next=' + window.location.pathname);
+      return;
+    }
     setIsProcessingOrder(true);
     setCustomerInfo(currentCustomerName, currentCustomerMobile); 
     
-    const order = await finalizeOrder();
+    const order = await finalizeOrder(currentUser); // Pass current user
     
     onPrintRequest({ order, profile: restaurantProfile }); 
     setIsProcessingOrder(false);
-    // clearOrder is called by PosClientPage after printing
   };
 
   const subtotal = getSubtotal();
@@ -126,25 +127,25 @@ export default function OrderCart({ onPrintRequest, restaurantProfile }: OrderCa
   return (
     <Card className="h-full flex flex-col shadow-xl">
       <CardHeader className="border-b">
-        <CardTitle className="flex items-center text-xl"> {/* Reduced size */}
+        <CardTitle className="flex items-center text-xl">
           <ShoppingCart className="mr-2 h-6 w-6 text-accent" />
           Order Cart
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0 flex-grow overflow-hidden">
-        <ScrollArea className="h-full p-3"> {/* Reduced padding */}
+        <ScrollArea className="h-full p-3">
           {items.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">Your cart is empty.</p>
           ) : (
-            <ul className="space-y-2.5"> {/* Reduced space */}
+            <ul className="space-y-2.5">
               {items.map((item: CartItem) => (
-                <li key={item.id} className="flex items-center space-x-2 p-2 bg-secondary/30 rounded-lg shadow-sm"> {/* Reduced padding */}
-                  <img src={item.imageUrl} alt={item.name} data-ai-hint={item.dataAiHint} className="w-12 h-12 object-cover rounded-md" /> {/* Reduced image size */}
+                <li key={item.id} className="flex items-center space-x-2 p-2 bg-secondary/30 rounded-lg shadow-sm">
+                  <img src={item.imageUrl} alt={item.name} data-ai-hint={item.dataAiHint} className="w-12 h-12 object-cover rounded-md" />
                   <div className="flex-grow">
-                    <p className="font-semibold text-xs leading-tight">{item.name}</p> {/* Reduced font size */}
+                    <p className="font-semibold text-xs leading-tight">{item.name}</p>
                     <p className="text-xs text-muted-foreground">${item.price.toFixed(2)}</p>
                   </div>
-                  <div className="flex items-center space-x-1"> {/* Reduced space */}
+                  <div className="flex items-center space-x-1">
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateItemQuantity(item.id, item.quantity - 1)} aria-label="Decrease quantity" disabled={isProcessing}>
                       <MinusCircle className="h-3.5 w-3.5" />
                     </Button>
@@ -169,7 +170,7 @@ export default function OrderCart({ onPrintRequest, restaurantProfile }: OrderCa
           )}
         </ScrollArea>
       </CardContent>
-      <CardFooter className="p-2.5 border-t flex-col space-y-2"> {/* Reduced padding */}
+      <CardFooter className="p-2.5 border-t flex-col space-y-2">
         <div className="w-full">
           <Label htmlFor="customerName" className="flex items-center mb-0.5 text-xs"><User className="mr-1.5 h-3 w-3"/>Customer Name</Label>
           <Input 
@@ -195,7 +196,6 @@ export default function OrderCart({ onPrintRequest, restaurantProfile }: OrderCa
           />
         </div>
         
-        {/* Voucher Section */}
         <div className="w-full space-y-1">
           <Label htmlFor="voucherCode" className="text-xs flex items-center"><Ticket className="mr-1.5 h-3.5 w-3.5"/>Voucher Code</Label>
           <div className="flex space-x-1.5">
@@ -205,7 +205,7 @@ export default function OrderCart({ onPrintRequest, restaurantProfile }: OrderCa
               value={currentVoucherCode}
               onChange={(e) => setCurrentVoucherCode(e.target.value)}
               className="flex-grow h-8 text-xs"
-              disabled={isProcessing || manualDiscountValue > 0} // Disable if manual discount is active
+              disabled={isProcessing || manualDiscountValue > 0} 
             />
             {appliedVoucher ? (
               <Button onClick={handleRemoveVoucher} variant="outline" size="sm" className="h-8 px-2.5 text-xs" disabled={isProcessing}>
@@ -225,14 +225,13 @@ export default function OrderCart({ onPrintRequest, restaurantProfile }: OrderCa
           )}
         </div>
 
-        {/* Manual Discount Section */}
         <div className="w-full space-y-1">
           <Label className="text-xs flex items-center"><DollarSign className="mr-1.5 h-3.5 w-3.5"/>Manual Discount</Label>
           <div className="flex space-x-1.5 items-center">
             <Select 
               value={currentManualDiscountType} 
               onValueChange={(value: 'percentage' | 'fixed') => setCurrentManualDiscountType(value)}
-              disabled={isProcessing || !!appliedVoucher} // Disable if voucher is active
+              disabled={isProcessing || !!appliedVoucher} 
             >
               <SelectTrigger className="w-[120px] h-8 text-xs">
                 <SelectValue />
@@ -248,7 +247,7 @@ export default function OrderCart({ onPrintRequest, restaurantProfile }: OrderCa
               value={currentManualDiscountValue}
               onChange={(e) => setCurrentManualDiscountValue(e.target.value)}
               className="flex-grow h-8 text-xs"
-              disabled={isProcessing || !!appliedVoucher} // Disable if voucher is active
+              disabled={isProcessing || !!appliedVoucher} 
             />
             {manualDiscountValue > 0 ? (
                  <Button onClick={handleRemoveManualDiscount} variant="outline" size="sm" className="h-8 px-2.5 text-xs" disabled={isProcessing || !!appliedVoucher}>
@@ -276,10 +275,11 @@ export default function OrderCart({ onPrintRequest, restaurantProfile }: OrderCa
         </div>
         
         <div className="w-full flex space-x-2 mt-1">
-           <Button onClick={clearOrder} variant="outline" className="w-full h-9 text-sm" disabled={isProcessing}>Clear Cart</Button>
-           <Button onClick={handleSaveAndPrint} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground h-9 text-sm" disabled={items.length === 0 || isProcessing}>
+           {/* clearOrder button might be better handled by parent after successful print/save */}
+           {/* <Button onClick={clearOrder} variant="outline" className="w-full h-9 text-sm" disabled={isProcessing}>Clear Cart</Button> */}
+           <Button onClick={handleSaveAndPrint} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground h-9 text-sm" disabled={items.length === 0 || isProcessing || !currentUser}>
              {isProcessingOrder ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Printer className="mr-2 h-4 w-4" />}
-             {isProcessingOrder ? 'Processing...' : 'Save & Print'}
+             {isProcessingOrder ? 'Processing...' : (currentUser ? 'Save & Print' : 'Login to Save')}
            </Button>
         </div>
       </CardFooter>

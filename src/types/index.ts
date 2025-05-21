@@ -4,7 +4,7 @@ export interface MenuItem {
   name: string;
   price: number;
   imageUrl: string;
-  code?: string; // Added code field for menu items
+  code?: string;
   dataAiHint?: string;
 }
 export type CreateMenuItemInput = Omit<MenuItem, 'id'>;
@@ -48,13 +48,16 @@ export interface Order {
   };
   manualDiscountType?: 'percentage' | 'fixed';
   manualDiscountValue?: number;
+  // User who created the order - for future tracking
+  createdByUid?: string;
+  createdByName?: string; 
 }
 
 // Costing Module Types
 export interface CostCategory {
   id: string;
   name: string;
-  nameLower?: string; // For case-insensitive checks
+  nameLower?: string; 
 }
 
 export type CreateCostCategoryInput = Omit<CostCategory, 'id' | 'nameLower'>;
@@ -71,7 +74,7 @@ export type CreatePurchaseItemInput = Omit<PurchaseItem, 'id'>;
 export interface Supplier {
   id: string;
   name: string;
-  nameLower?: string; // For case-insensitive checks
+  nameLower?: string;
   address?: string;
   mobile?: string;
   contactPerson?: string;
@@ -87,7 +90,7 @@ export interface PurchaseBill {
   billNumber?: string;
   purchaseOrderNumber?: string;
   totalAmount: number;
-  createdAt: string; // ISO string, for record keeping
+  createdAt: string; // ISO string
 }
 export type CreatePurchaseBillInput = Omit<PurchaseBill, 'id' | 'totalAmount' | 'createdAt'> & {
   items: Array<Omit<CreateCostEntryInput, 'date' | 'purchaseBillId' | 'categoryName' | 'categoryId' | 'purchaseItemCode' > & { categoryId: string, categoryName: string, purchaseItemCode?: string }>;
@@ -128,7 +131,6 @@ export interface SupplierBalance extends Supplier {
   currentDue: number;
 }
 
-// For Supplier Due Report - All Suppliers View
 export interface SupplierPeriodicSummary extends Supplier {
   openingDue: number;
   purchasesInPeriod: number;
@@ -136,7 +138,6 @@ export interface SupplierPeriodicSummary extends Supplier {
   closingDue: number;
 }
 
-// For Supplier Due Report - Individual Ledger View
 export interface LedgerTransaction {
   id: string;
   date: string; // ISO string
@@ -154,9 +155,8 @@ export interface SupplierLedgerData {
   closingBalance: number;
 }
 
-// Restaurant Profile
 export interface RestaurantProfile {
-  id: string; // Should be a fixed ID e.g., "main_config"
+  id: string; 
   name?: string;
   address?: string;
   contactNumber?: string;
@@ -166,8 +166,25 @@ export interface RestaurantProfile {
 
 export type UpdateRestaurantProfileInput = Partial<Omit<RestaurantProfile, 'id' | 'updatedAt'>>;
 
-// Prop type for OrderCart onPrintRequest
 export interface PrintRequestData {
   order: Order | null;
   profile: RestaurantProfile | null;
 }
+
+// User and Auth Types
+export type UserRole = 'admin' | 'cashier' | 'viewer'; // Add more roles as needed
+
+export interface AppUser {
+  uid: string; // Firebase Auth UID
+  email: string;
+  displayName?: string; // "Employee Name"
+  mobile?: string;
+  designation?: string;
+  role: UserRole;
+  createdAt: string; // ISO string
+  updatedAt?: string; // ISO string
+}
+
+export type CreateAppUserInput = Omit<AppUser, 'uid' | 'createdAt' | 'updatedAt'> & { uid: string };
+export type UpdateAppUserInput = Partial<Omit<AppUser, 'uid' | 'createdAt' | 'email'>>;
+
