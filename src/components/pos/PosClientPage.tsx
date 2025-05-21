@@ -22,35 +22,31 @@ export default function PosClientPage() {
     try {
       const items = await fetchMenuItemsAction();
       setMenuItems(items);
-      if (items.length === 0 && !isLoading) { // Check if still loading to avoid premature toast
+      if (items.length === 0 && !isLoading) { 
         toast({
           title: "Menu Information",
-          description: "No menu items were found. Please add items via Menu Management.",
+          description: "No menu items were found. Please check public/menu-items.json or add items if it's empty.",
           variant: "default",
-          duration: 5000,
+          duration: 7000,
         });
       }
     } catch (error) {
       console.error("Failed to load menu items on POS page:", error);
-      let description = "Could not fetch menu items. Please try again later.";
+      let description = "Could not fetch menu items. Please check the server console for errors related to reading public/menu-items.json.";
       if (error instanceof Error) {
         description = error.message;
-        // Check for Firestore permission denied error code
-        if ((error as any).code === 'permission-denied' || (error as any).code === 'PERMISSION_DENIED') {
-          description = "Permission denied when fetching menu items. Please check your Firebase security rules for the 'menuItems' collection to allow reads.";
-        }
       }
       toast({
         title: "Error Loading Menu",
         description: description,
         variant: "destructive",
-        duration: 10000, // Longer duration for important errors
+        duration: 10000,
       });
-      setMenuItems([]); // Set to empty array on error
+      setMenuItems([]); 
     } finally {
       setIsLoading(false);
     }
-  }, []); // Removed toast from dependencies as it's stable from useToast
+  }, [isLoading]); 
 
   useEffect(() => {
     loadMenuItems();
@@ -109,11 +105,11 @@ export default function PosClientPage() {
             <PackageOpen className="w-20 h-20 mb-6 text-primary/70" />
             <h2 className="text-2xl font-semibold mb-2">Menu is Empty</h2>
             <p className="text-center max-w-md">
-              No menu items are currently available. Please add items through the
-              <strong className="text-accent"> Menu Management </strong>
-              page to populate the POS.
+              No menu items are currently available. Please add items to the 
+              <code className="bg-muted text-muted-foreground/80 px-1 py-0.5 rounded mx-1">public/menu-items.json</code> 
+              file.
             </p>
-            <p className="text-xs mt-4">If you recently added items and they are not appearing, please check for error messages or verify your Firebase setup (especially Firestore security rules).</p>
+            <p className="text-xs mt-4">If you recently added items and they are not appearing, ensure the JSON format is correct and try restarting your development server.</p>
           </div>
         )}
       </main>

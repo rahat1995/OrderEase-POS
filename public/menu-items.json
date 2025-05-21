@@ -1,13 +1,37 @@
-
 [
-  { "id": "pizza-m", "name": "Pizza Margherita", "price": 12.99, "imageUrl": "https://placehold.co/300x200.png", "dataAiHint": "pizza cheese" },
-  { "id": "burger-c", "name": "Classic Burger", "price": 8.50, "imageUrl": "https://placehold.co/300x200.png", "dataAiHint": "burger beef" },
-  { "id": "fries-s", "name": "Crispy Fries", "price": 3.00, "imageUrl": "https://placehold.co/300x200.png", "dataAiHint": "french fries" },
-  { "id": "coke-z", "name": "Cola Drink", "price": 2.00, "imageUrl": "https://placehold.co/300x200.png", "dataAiHint": "soda can" },
-  { "id": "salad-g", "name": "Garden Salad", "price": 7.50, "imageUrl": "https://placehold.co/300x200.png", "dataAiHint": "fresh salad" },
-  { "id": "pasta-b", "name": "Pasta Bolognese", "price": 11.00, "imageUrl": "https://placehold.co/300x200.png", "dataAiHint": "pasta meat" },
-  { "id": "sand-t", "name": "Turkey Sandwich", "price": 6.75, "imageUrl": "https://placehold.co/300x200.png", "dataAiHint": "sandwich deli" },
-  { "id": "juice-o", "name": "Orange Juice", "price": 3.50, "imageUrl": "https://placehold.co/300x200.png", "dataAiHint": "orange juice" },
-  { "id": "ice-cream-v", "name": "Vanilla Ice Cream", "price": 4.25, "imageUrl": "https://placehold.co/300x200.png", "dataAiHint": "ice cream" },
-  { "id": "coffee-l", "name": "Latte Coffee", "price": 3.75, "imageUrl": "https://placehold.co/300x200.png", "dataAiHint": "coffee cup" }
+  {
+    "id": "item-1",
+    "name": "Margherita Pizza",
+    "price": 12.99,
+    "imageUrl": "https://placehold.co/300x200.png?text=Margherita+Pizza",
+    "dataAiHint": "pizza cheese"
+  },
+  {
+    "id": "item-2",
+    "name": "Classic Burger",
+    "price": 9.50,
+    "imageUrl": "https://placehold.co/300x200.png?text=Classic+Burger",
+    "dataAiHint": "burger beef"
+  },
+  {
+    "id": "item-3",
+    "name": "Caesar Salad",
+    "price": 8.75,
+    "imageUrl": "https://placehold.co/300x200.png?text=Caesar+Salad",
+    "dataAiHint": "salad chicken"
+  },
+  {
+    "id": "item-4",
+    "name": "Spaghetti Carbonara",
+    "price": 14.00,
+    "imageUrl": "https://placehold.co/300x200.png?text=Spaghetti+Carbonara",
+    "dataAiHint": "pasta italian"
+  },
+  {
+    "id": "item-5",
+    "name": "Soft Drink",
+    "price": 2.50,
+    "imageUrl": "https://placehold.co/300x200.png?text=Soft+Drink",
+    "dataAiHint": "beverage soda"
+  }
 ]
