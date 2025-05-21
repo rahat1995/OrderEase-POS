@@ -2,9 +2,9 @@
 'use server';
 
 import { db } from '@/lib/firebase';
-import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, where, Timestamp, runTransaction, increment } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, where, Timestamp, runTransaction, increment, orderBy } from 'firebase/firestore'; // Added orderBy
 import type { Voucher, CreateVoucherInput } from '@/types';
-import { parseISO, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
+import { parseISO, isWithinInterval, startOfDay, endOfDay, format } from 'date-fns'; // Added format
 
 function formatFirebaseError(e: unknown, defaultMessage: string): string {
   console.error("[Server Action] Raw error in formatFirebaseError:", e);
@@ -79,9 +79,8 @@ export async function fetchVouchersAction(): Promise<Voucher[]> {
   console.log('[Server Action] fetchVouchersAction: Entered');
   try {
     const vouchersCol = collection(db, 'vouchers');
-    const q = query(vouchersCol, where('isActive', '==', true), where('validUntil', '>=', Timestamp.now())); // Example: Fetch active and not yet expired
     // For admin, you might want to fetch all, including inactive/expired, or provide filters
-    const adminQuery = query(collection(db, 'vouchers'), orderBy('createdAt', 'desc'));
+    const adminQuery = query(vouchersCol, orderBy('createdAt', 'desc'));
     const querySnapshot = await getDocs(adminQuery);
     const vouchers = querySnapshot.docs.map(doc => {
       const data = doc.data();
@@ -97,7 +96,12 @@ export async function fetchVouchersAction(): Promise<Voucher[]> {
     return vouchers;
   } catch (error) {
     console.error("[Server Action] fetchVouchersAction: Error caught!", error);
-    throw error;
+    // Re-throw for client-side handling.
+    // Client-side should be prepared to catch this and display a user-friendly message.
+    if (error instanceof Error) {
+      throw new Error(`Failed to fetch vouchers: ${error.message}`);
+    }
+    throw new Error("An unknown error occurred while fetching vouchers.");
   }
 }
 
@@ -105,17 +109,17 @@ export async function updateVoucherAction(voucherId: string, updates: Partial<Om
   console.log(`[Server Action] updateVoucherAction: Entered for voucherId: ${voucherId} with updates:`, JSON.stringify(updates, null, 2));
   try {
     const voucherDocRef = doc(db, 'vouchers', voucherId);
-    const updatesToSave: any = { ...updates };
+    const updatesToSave: any = { ...updates }; // Use any to allow flexible field additions like codeLower
 
     if (updates.discountValue !== undefined) updatesToSave.discountValue = Number(updates.discountValue) || 0;
-    if (updates.minOrderAmount !== undefined) updatesToSave.minOrderAmount = Number(updates.minOrderAmount) || undefined;
-    if (updates.usageLimit !== undefined) updatesToSave.usageLimit = Number(updates.usageLimit) || undefined;
+    if (updates.minOrderAmount !== undefined) updatesToSave.minOrderAmount = updates.minOrderAmount ? Number(updates.minOrderAmount) : null; // Allow setting to null
+    if (updates.usageLimit !== undefined) updatesToSave.usageLimit = updates.usageLimit ? Number(updates.usageLimit) : null; // Allow setting to null
     
     if (updates.validFrom) updatesToSave.validFrom = Timestamp.fromDate(parseISO(updates.validFrom));
-    else if (updates.validFrom === null) updatesToSave.validFrom = null;
+    else if (updates.hasOwnProperty('validFrom') && updates.validFrom === null) updatesToSave.validFrom = null;
 
     if (updates.validUntil) updatesToSave.validUntil = Timestamp.fromDate(parseISO(updates.validUntil));
-    else if (updates.validUntil === null) updatesToSave.validUntil = null;
+    else if (updates.hasOwnProperty('validUntil') && updates.validUntil === null) updatesToSave.validUntil = null;
     
     if (updates.code) {
         const trimmedCode = updates.code.trim();
@@ -123,12 +127,10 @@ export async function updateVoucherAction(voucherId: string, updates: Partial<Om
         updatesToSave.code = trimmedCode;
         updatesToSave.codeLower = trimmedCode.toLowerCase();
         // Check for uniqueness if code is changed
-        if (updatesToSave.codeLower) {
-            const q = query(collection(db, 'vouchers'), where('codeLower', '==', updatesToSave.codeLower));
-            const snapshot = await getDocs(q);
-            if (snapshot.docs.some(d => d.id !== voucherId)) {
-                 return { success: false, error: `Voucher code "${trimmedCode}" already exists.` };
-            }
+        const q = query(collection(db, 'vouchers'), where('codeLower', '==', updatesToSave.codeLower));
+        const snapshot = await getDocs(q);
+        if (snapshot.docs.some(d => d.id !== voucherId)) {
+              return { success: false, error: `Voucher code "${trimmedCode}" already exists.` };
         }
     }
 
@@ -183,10 +185,11 @@ export async function validateVoucherAction(
     const voucher: Voucher = {
       id: voucherDoc.id,
       ...voucherData,
+      // Ensure dates are ISO strings for the returned object
       validFrom: voucherData.validFrom ? (voucherData.validFrom as Timestamp).toDate().toISOString() : undefined,
       validUntil: voucherData.validUntil ? (voucherData.validUntil as Timestamp).toDate().toISOString() : undefined,
       createdAt: (voucherData.createdAt as Timestamp).toDate().toISOString(),
-    } as Voucher;
+    } as Voucher; // Cast as Voucher to satisfy type, actual fields depend on Firestore data
 
     if (!voucher.isActive) {
       return { success: false, error: "This voucher is currently inactive." };
@@ -222,9 +225,17 @@ export async function incrementVoucherUsageAction(voucherId: string): Promise<{ 
     console.log(`[Server Action] incrementVoucherUsageAction: Incrementing usage for voucherId: ${voucherId}`);
     try {
         const voucherDocRef = doc(db, 'vouchers', voucherId);
-        await updateDoc(voucherDocRef, {
-            timesUsed: increment(1)
+        
+        // Using a transaction to safely increment the timesUsed field
+        await runTransaction(db, async (transaction) => {
+            const voucherSnapshot = await transaction.get(voucherDocRef);
+            if (!voucherSnapshot.exists()) {
+                throw new Error("Voucher not found for incrementing usage.");
+            }
+            // const currentTimesUsed = voucherSnapshot.data().timesUsed || 0;
+            transaction.update(voucherDocRef, { timesUsed: increment(1) });
         });
+
         console.log('[Server Action] incrementVoucherUsageAction: Success! Usage incremented for voucher:', voucherId);
         return { success: true };
     } catch (e) {
