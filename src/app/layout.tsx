@@ -1,35 +1,62 @@
 
-import type { Metadata } from 'next';
+"use client"; // Required for the hook
+
+import type { Metadata } from 'next'; // Still can have metadata in client component layout
 import { Geist } from 'next/font/google';
 import Link from 'next/link';
 import './globals.css';
 import { OrderProvider } from '@/contexts/OrderContext';
 import { Toaster } from '@/components/ui/toaster';
 import { Button } from '@/components/ui/button';
-import { BarChart3, CreditCard, FileText, Landmark, ListPlus, PieChart, ShoppingCart, Tag, TrendingUp, Users } from 'lucide-react';
-
+import {
+  ShoppingCart,
+  ListPlus,
+  Tag,
+  Landmark,
+  CreditCard,
+  BarChart3,
+  TrendingUp,
+  PieChart,
+  Users,
+  WifiOff, // Icon for offline
+} from 'lucide-react';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus'; // Import the new hook
+import { cn } from '@/lib/utils';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
   subsets: ['latin'],
 });
 
-
-export const metadata: Metadata = {
-  title: 'OrderEase POS',
-  description: 'Point of Sale system for restaurants',
-};
+// export const metadata: Metadata = { // Metadata can be exported from client components
+//   title: 'OrderEase POS',
+//   description: 'Point of Sale system for restaurants',
+// };
 
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const isOnline = useOnlineStatus();
+
   return (
     <html lang="en">
+      <head>
+        {/* Metadata tags can be placed directly in head if not using the metadata object */}
+        <title>OrderEase POS</title>
+        <meta name="description" content="Point of Sale system for restaurants" />
+        {/* Add other global metadata tags here if needed */}
+      </head>
       <body className={`${geistSans.variable} antialiased bg-secondary/30 text-foreground`}>
         <OrderProvider>
-          <header className="bg-background shadow-md sticky top-0 z-50">
+          {!isOnline && (
+            <div className="bg-destructive text-destructive-foreground text-center py-2 px-4 fixed top-0 left-0 right-0 z-[1000] flex items-center justify-center">
+              <WifiOff className="h-5 w-5 mr-2" />
+              <span>You are currently offline. Changes will be synced when you reconnect.</span>
+            </div>
+          )}
+          <header className={cn("bg-background shadow-md sticky z-50", isOnline ? "top-0" : "top-10")}> {/* Adjust sticky top based on offline banner */}
             <nav className="container mx-auto px-4 py-2 flex justify-between items-center">
               <Link href="/" legacyBehavior passHref>
                 <a className="text-2xl font-bold text-primary hover:text-accent transition-colors">
@@ -90,7 +117,7 @@ export default function RootLayout({
               </div>
             </nav>
           </header>
-          <div className="min-h-[calc(100vh-var(--header-height,60px))]">
+          <div className={cn("min-h-[calc(100vh-var(--header-height,60px))]", !isOnline && "pt-10")}> {/* Adjust padding top if offline banner is visible */}
             {children}
           </div>
           <Toaster />
