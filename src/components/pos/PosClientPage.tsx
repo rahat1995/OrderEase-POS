@@ -18,11 +18,12 @@ export default function PosClientPage() {
   const { clearOrder } = useOrder();
 
   const loadMenuItems = useCallback(async () => {
+    console.log("PosClientPage: loadMenuItems called");
     setIsLoading(true);
     try {
       const items = await fetchMenuItemsAction();
       setMenuItems(items);
-      if (items.length === 0 && !isLoading) { 
+      if (items.length === 0) {
         toast({
           title: "Menu Information",
           description: "No menu items were found. Please check public/menu-items.json or add items if it's empty.",
@@ -31,10 +32,13 @@ export default function PosClientPage() {
         });
       }
     } catch (error) {
-      console.error("Failed to load menu items on POS page:", error);
+      console.error("PosClientPage: Failed to load menu items:", error);
       let description = "Could not fetch menu items. Please check the server console for errors related to reading public/menu-items.json.";
       if (error instanceof Error) {
         description = error.message;
+        if ((error as any).code === 'ENOENT') {
+          description = "The menu file (public/menu-items.json) was not found. Please create it.";
+        }
       }
       toast({
         title: "Error Loading Menu",
@@ -42,15 +46,19 @@ export default function PosClientPage() {
         variant: "destructive",
         duration: 10000,
       });
-      setMenuItems([]); 
+      setMenuItems([]);
     } finally {
       setIsLoading(false);
+      console.log("PosClientPage: loadMenuItems finished");
     }
-  }, [isLoading]); 
+  // Removed `isLoading` from dependency array to prevent potential infinite loop
+  // eslint-disable-next-line react-hooks/exhaustive-deps 
+  }, []); 
 
   useEffect(() => {
+    console.log("PosClientPage: useEffect for loadMenuItems triggered");
     loadMenuItems();
-  }, [loadMenuItems]);
+  }, [loadMenuItems]); // This will run once on mount as loadMenuItems is stable
 
   const handlePrintRequest = useCallback(async (order: Order | null) => {
     if (order) {
@@ -67,16 +75,24 @@ export default function PosClientPage() {
 
   useEffect(() => {
     if (orderForPrint) {
+      console.log("PosClientPage: Order ready for print", orderForPrint);
       const printAction = () => {
         window.print();
+        // Using a timeout to ensure print dialog doesn't block subsequent UI updates immediately
         setTimeout(() => {
-          clearOrder();
-          setOrderForPrint(null);
-          toast({ title: "Printing complete.", description: "Cart has been cleared." });
-        }, 500);
+          try {
+            clearOrder();
+            setOrderForPrint(null); // Clear the orderForPrint state
+            toast({ title: "Printing complete.", description: "Cart has been cleared." });
+          } catch (e) {
+            console.error("Error during post-print cleanup:", e);
+            toast({title: "Cleanup Error", description: "Error clearing cart after print.", variant: "destructive"});
+          }
+        }, 500); 
       };
 
-      const timer = setTimeout(printAction, 100);
+      // Delay slightly to ensure DOM update before print dialog
+      const timer = setTimeout(printAction, 100); 
       return () => clearTimeout(timer);
     }
   }, [orderForPrint, clearOrder]);

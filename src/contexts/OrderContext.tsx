@@ -43,97 +43,158 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
   const [isVoucherLoading, setIsVoucherLoading] = useState(false);
 
   const addItem = useCallback((item: MenuItem) => {
-    setItems((prevItems) => {
-      const existingItem = prevItems.find((i) => i.id === item.id);
-      if (existingItem) {
-        return prevItems.map((i) =>
-          i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
-        );
-      }
-      return [...prevItems, { ...item, quantity: 1 }];
-    });
+    try {
+      setItems((prevItems) => {
+        const existingItem = prevItems.find((i) => i.id === item.id);
+        if (existingItem) {
+          return prevItems.map((i) =>
+            i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
+          );
+        }
+        return [...prevItems, { ...item, quantity: 1 }];
+      });
+    } catch (e) {
+      console.error("OrderContext: Error in addItem", e);
+      toast({title: "Cart Error", description: "Could not add item to cart.", variant: "destructive"});
+    }
   }, []);
 
   const removeItem = useCallback((itemId: string) => {
-    setItems((prevItems) => prevItems.filter((i) => i.id !== itemId));
+    try {
+      setItems((prevItems) => prevItems.filter((i) => i.id !== itemId));
+    } catch (e) {
+      console.error("OrderContext: Error in removeItem", e);
+      toast({title: "Cart Error", description: "Could not remove item from cart.", variant: "destructive"});
+    }
   }, []);
 
   const updateItemQuantity = useCallback((itemId: string, quantity: number) => {
-    if (quantity <= 0) {
-      removeItem(itemId);
-    } else {
-      setItems((prevItems) =>
-        prevItems.map((i) => (i.id === itemId ? { ...i, quantity } : i))
-      );
+    try {
+      if (quantity <= 0) {
+        removeItem(itemId);
+      } else {
+        setItems((prevItems) =>
+          prevItems.map((i) => (i.id === itemId ? { ...i, quantity } : i))
+        );
+      }
+    } catch (e) {
+      console.error("OrderContext: Error in updateItemQuantity", e);
+      toast({title: "Cart Error", description: "Could not update item quantity.", variant: "destructive"});
     }
   }, [removeItem]);
 
   const setCustomerInfo = useCallback((name: string, mobile: string) => {
-    setCustomerName(name);
-    setCustomerMobile(mobile);
+    try {
+      setCustomerName(name);
+      setCustomerMobile(mobile);
+    } catch (e) {
+      console.error("OrderContext: Error in setCustomerInfo", e);
+    }
   }, []);
 
   const generateOrderToken = useCallback((): string => {
-    const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const timePart = Date.now().toString().slice(-6);
-    return `TKN-${timePart}-${randomPart}`;
+    try {
+      const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const timePart = Date.now().toString().slice(-6);
+      return `TKN-${timePart}-${randomPart}`;
+    } catch (e) {
+      console.error("OrderContext: Error in generateOrderToken", e);
+      return `TKN-ERROR-${Date.now()}`;
+    }
   }, []);
   
   const getSubtotal = useCallback((): number => {
-    return items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    try {
+      return items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    } catch (e) {
+      console.error("OrderContext: Error in getSubtotal", e);
+      return 0;
+    }
   }, [items]);
 
   const applyVoucher = useCallback(async (code: string) => {
-    if (!code.trim()) {
-      setVoucherError("Please enter a voucher code.");
-      setAppliedVoucher(null);
-      return;
+    try {
+      if (!code.trim()) {
+        setVoucherError("Please enter a voucher code.");
+        setAppliedVoucher(null);
+        return;
+      }
+      setIsVoucherLoading(true);
+      setVoucherError(null);
+      const subtotal = getSubtotal();
+      const result = await validateVoucherAction(code, subtotal);
+      if (result.success && result.voucher) {
+        setAppliedVoucher(result.voucher);
+        toast({ title: "Voucher Applied", description: `Discount for "${result.voucher.code}" applied.` });
+      } else {
+        setAppliedVoucher(null);
+        setVoucherError(result.error || "Failed to apply voucher.");
+        toast({ title: "Voucher Error", description: result.error || "Invalid voucher.", variant: "destructive" });
+      }
+    } catch (e) {
+        console.error("OrderContext: Error in applyVoucher", e);
+        setAppliedVoucher(null);
+        setVoucherError("An unexpected error occurred while applying voucher.");
+        toast({ title: "Voucher System Error", description: "Could not apply voucher.", variant: "destructive" });
+    } finally {
+        setIsVoucherLoading(false);
     }
-    setIsVoucherLoading(true);
-    setVoucherError(null);
-    const subtotal = getSubtotal();
-    const result = await validateVoucherAction(code, subtotal);
-    if (result.success && result.voucher) {
-      setAppliedVoucher(result.voucher);
-      toast({ title: "Voucher Applied", description: `Discount for "${result.voucher.code}" applied.` });
-    } else {
-      setAppliedVoucher(null);
-      setVoucherError(result.error || "Failed to apply voucher.");
-      toast({ title: "Voucher Error", description: result.error || "Invalid voucher.", variant: "destructive" });
-    }
-    setIsVoucherLoading(false);
   }, [getSubtotal]);
 
   const removeVoucher = useCallback(() => {
-    setAppliedVoucher(null);
-    setVoucherError(null);
-    toast({ title: "Voucher Removed" });
+    try {
+      setAppliedVoucher(null);
+      setVoucherError(null);
+      toast({ title: "Voucher Removed" });
+    } catch (e) {
+      console.error("OrderContext: Error in removeVoucher", e);
+    }
   }, []);
 
   const getDiscountAmount = useCallback((): number => {
-    if (!appliedVoucher) return 0;
-    const subtotal = getSubtotal();
-    let calculatedDiscount = 0;
-    if (appliedVoucher.discountType === 'percentage') {
-      calculatedDiscount = subtotal * (appliedVoucher.discountValue / 100);
-    } else {
-      calculatedDiscount = appliedVoucher.discountValue;
+    try {
+      if (!appliedVoucher) return 0;
+      const subtotal = getSubtotal();
+      let calculatedDiscount = 0;
+      if (appliedVoucher.discountType === 'percentage') {
+        calculatedDiscount = subtotal * (appliedVoucher.discountValue / 100);
+      } else {
+        calculatedDiscount = appliedVoucher.discountValue;
+      }
+      calculatedDiscount = Math.max(0, calculatedDiscount); 
+      return Math.min(calculatedDiscount, subtotal); // Discount cannot exceed subtotal
+    } catch (e) {
+      console.error("OrderContext: Error in getDiscountAmount", e);
+      return 0;
     }
-    calculatedDiscount = Math.max(0, calculatedDiscount); 
-    return Math.min(calculatedDiscount, subtotal); // Discount cannot exceed subtotal
   }, [getSubtotal, appliedVoucher]);
 
   const getTotal = useCallback((): number => {
-    return getSubtotal() - getDiscountAmount();
+    try {
+      return getSubtotal() - getDiscountAmount();
+    } catch (e) {
+      console.error("OrderContext: Error in getTotal", e);
+      return getSubtotal(); // Fallback to subtotal if discount calculation fails
+    }
   }, [getSubtotal, getDiscountAmount]);
 
   const clearOrder = useCallback(() => {
-    setItems([]);
-    setAppliedVoucher(null);
-    setVoucherError(null);
-    setCustomerName('');
-    setCustomerMobile('');
-    toast({ title: "Cart Cleared", description: "Ready for a new order." });
+    try {
+      setItems([]);
+      setAppliedVoucher(null);
+      setVoucherError(null);
+      setCustomerName('');
+      setCustomerMobile('');
+      toast({ title: "Cart Cleared", description: "Ready for a new order." });
+    } catch (e) {
+      console.error("OrderContext: Error in clearOrder", e);
+      // Attempt to clear anyway
+      setItems([]);
+      setAppliedVoucher(null);
+      setCustomerName('');
+      setCustomerMobile('');
+      toast({ title: "Cart Clearing Error", description: "Some items may not have cleared.", variant: "destructive" });
+    }
   }, []);
 
   const finalizeOrder = useCallback(async (): Promise<Order | null> => {
@@ -141,28 +202,29 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
       toast({ title: "Cannot Finalize", description: "Cart is empty.", variant: "destructive" });
       return null;
     }
-    const token = generateOrderToken();
-    const orderSubtotal = getSubtotal();
-    const discountApplied = getDiscountAmount();
-    const orderTotal = getTotal();
-
-    const orderData: Order = {
-      id: token, 
-      token,
-      items,
-      subtotal: orderSubtotal,
-      discountAmount: discountApplied,
-      total: orderTotal,
-      customerName: customerName || undefined,
-      customerMobile: customerMobile || undefined,
-      orderDate: new Date().toISOString(),
-      appliedVoucherCode: appliedVoucher?.code,
-      voucherDiscountDetails: appliedVoucher ? { type: appliedVoucher.discountType, value: appliedVoucher.discountValue } : undefined,
-    };
-    
+    let orderData: Order | null = null;
     try {
+      const token = generateOrderToken();
+      const orderSubtotal = getSubtotal();
+      const discountApplied = getDiscountAmount();
+      const orderTotal = getTotal();
+
+      orderData = {
+        id: token, 
+        token,
+        items,
+        subtotal: orderSubtotal,
+        discountAmount: discountApplied,
+        total: orderTotal,
+        customerName: customerName || undefined,
+        customerMobile: customerMobile || undefined,
+        orderDate: new Date().toISOString(),
+        appliedVoucherCode: appliedVoucher?.code,
+        voucherDiscountDetails: appliedVoucher ? { type: appliedVoucher.discountType, value: appliedVoucher.discountValue } : undefined,
+      };
+    
       toast({ title: "Saving Order...", description: `Token: ${token}. Please wait.`});
-      const result = await saveOrderAction(orderData); // saveOrderAction will handle incrementing voucher usage
+      const result = await saveOrderAction(orderData); 
       if (result.success && result.orderId) {
         toast({ title: "Order Saved & Finalized", description: `DB ID: ${result.orderId}, Token: ${token}. Preparing for print.`});
         return { ...orderData, id: result.orderId }; 
@@ -170,10 +232,13 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
         throw new Error(result.error || "Failed to save order to database.");
       }
     } catch (error) {
-      console.error("Error saving order:", error);
+      console.error("OrderContext: Error saving order:", error);
       toast({ title: "Error Saving Order", description: (error instanceof Error ? error.message : "Unknown error") + " Check console for details.", variant: "destructive" });
-      toast({ title: "Order Finalized (Locally)", description: `Token: ${token}. DB save failed. Preparing for print.` , variant: "destructive"});
-      return orderData; 
+      if (orderData) { // If orderData was formed but saving failed
+        toast({ title: "Order Finalized (Locally)", description: `Token: ${orderData.token}. DB save failed. Preparing for print.` , variant: "destructive"});
+        return orderData; 
+      }
+      return null;
     }
   }, [items, getSubtotal, getDiscountAmount, getTotal, customerName, customerMobile, generateOrderToken, appliedVoucher]);
 
@@ -213,3 +278,4 @@ export const useOrder = (): OrderContextType => {
   }
   return context;
 };
+
