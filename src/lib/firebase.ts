@@ -13,19 +13,32 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Check if the API key is present and not a placeholder
-// This log will appear in the terminal where `npm run dev` is running.
-if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "your_api_key" || firebaseConfig.apiKey === "your_api_key_here" || firebaseConfig.apiKey.length < 10) { // Added a basic length check
-  console.error(
-    "\n\n" +
-    "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n" +
-    "Firebase API Key (NEXT_PUBLIC_FIREBASE_API_KEY) is MISSING, a PLACEHOLDER, or INVALID.\n" +
-    "Please ensure it is correctly set in your .env.local file.\n" +
-    "You can find your API key in your Firebase project settings.\n" +
-    "After updating .env.local, you MUST restart your Next.js development server (npm run dev).\n" +
-    "Current value for apiKey being used is: '" + firebaseConfig.apiKey + "'\n" +
-    "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n"
-  );
+// CRITICAL CHECK FOR API KEY
+const apiKey = firebaseConfig.apiKey;
+const isApiKeyMissingOrPlaceholder = !apiKey || apiKey.startsWith("your_") || apiKey.startsWith("AIzaSyYOUR_") || apiKey.length < 10;
+
+if (isApiKeyMissingOrPlaceholder) {
+  const errorMessage = [
+    "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
+    "CRITICAL FIREBASE CONFIGURATION ERROR:",
+    "Firebase API Key (NEXT_PUBLIC_FIREBASE_API_KEY) is MISSING, a PLACEHOLDER, or INVALID.",
+    "Your application WILL NOT be able to connect to Firebase services.",
+    "------------------------------------------------------------------------------------",
+    "TROUBLESHOOTING STEPS:",
+    "1. Ensure you have a '.env.local' file in the ROOT of your project directory.",
+    "2. In '.env.local', make sure NEXT_PUBLIC_FIREBASE_API_KEY is set to your ACTUAL API key.",
+    "   Example: NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+    "3. Find your API key in: Firebase Console -> Project settings (gear icon ⚙️) -> General tab -> Your apps -> SDK setup and configuration.",
+    "4. After editing and SAVING '.env.local', you MUST RESTART your Next.js development server (stop 'npm run dev' and run it again).",
+    "------------------------------------------------------------------------------------",
+    `Current value loaded for NEXT_PUBLIC_FIREBASE_API_KEY: '${apiKey}'`,
+    apiKey && apiKey.length > 5 ? `   (Starts with: '${apiKey.substring(0, 5)}')` : "   (Value appears to be missing or very short!)",
+    "If this value is 'undefined', a placeholder, or not your actual key, Firebase will fail.",
+    "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+  ].join("\n");
+  console.error("\n\n" + errorMessage + "\n\n");
+  // Optionally, in a real app, you might throw an error here or prevent app initialization
+  // throw new Error("Firebase API Key is not configured correctly. Halting application. Please check server console and .env.local.");
 }
 
 
@@ -43,6 +56,7 @@ if (getApps().length === 0) {
 
 const db: Firestore = getFirestore(app);
 const storage: FirebaseStorage = getStorage(app);
+// The line below is where the 'auth/invalid-api-key' error often originates if the API key is wrong
 const auth: Auth = getAuth(app); // Initialize Firebase Auth. This call will fail if API key is invalid.
 
 export { app, db, storage, auth }; // Export auth
