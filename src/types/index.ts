@@ -31,6 +31,19 @@ export interface Voucher {
 }
 export type CreateVoucherInput = Omit<Voucher, 'id' | 'codeLower' | 'timesUsed' | 'createdAt'>;
 
+export interface LoyalCustomerDiscount {
+  id: string;
+  mobileNumber: string;
+  customerName?: string; // For admin reference
+  discountType: 'percentage' | 'fixed';
+  discountValue: number;
+  isActive: boolean;
+  createdAt: string; // ISO string
+  updatedAt?: string; // ISO string
+}
+export type CreateLoyalCustomerDiscountInput = Omit<LoyalCustomerDiscount, 'id' | 'createdAt' | 'updatedAt'>;
+
+
 export interface Order {
   id: string;
   items: CartItem[];
@@ -41,6 +54,12 @@ export interface Order {
   customerMobile?: string;
   orderDate: string; // ISO string
   token: string;
+  // Discount details
+  appliedLoyalDiscountDetails?: {
+    mobileNumber: string;
+    type: 'percentage' | 'fixed';
+    value: number;
+  };
   appliedVoucherCode?: string;
   voucherDiscountDetails?: {
     type: 'percentage' | 'fixed';
@@ -48,15 +67,13 @@ export interface Order {
   };
   manualDiscountType?: 'percentage' | 'fixed';
   manualDiscountValue?: number;
-  // Removed: createdByUid?: string;
-  // Removed: createdByName?: string; 
 }
 
 // Costing Module Types
 export interface CostCategory {
   id: string;
   name: string;
-  nameLower?: string; 
+  nameLower?: string;
 }
 
 export type CreateCostCategoryInput = Omit<CostCategory, 'id' | 'nameLower'>;
@@ -155,7 +172,7 @@ export interface SupplierLedgerData {
 }
 
 export interface RestaurantProfile {
-  id: string; 
+  id: string;
   name?: string;
   address?: string;
   contactNumber?: string;

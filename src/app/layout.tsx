@@ -1,8 +1,7 @@
 
-"use client"; 
+"use client";
 
-import type { Metadata } from 'next'; 
-// Removed: AuthProvider and useAuth imports
+import type { Metadata } from 'next';
 import { Geist } from 'next/font/google';
 import Link from 'next/link';
 import './globals.css';
@@ -18,38 +17,24 @@ import {
   BarChart3,
   TrendingUp,
   PieChart,
-  Users as UsersIcon, 
+  Users as UsersIcon,
+  Building,
   WifiOff,
   RefreshCw,
-  Building, 
-  // SettingsIcon, // Removed as it was mainly for user profile
-  // LogOut, // Removed
-  // LogIn, // Removed
-  // UserCog, // Removed for User Management
+  Gift, // For Loyal Customer Discounts
 } from 'lucide-react';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { cn } from '@/lib/utils';
-import { clearAllAppCache } from '@/lib/cache'; 
-import { toast } from '@/hooks/use-toast'; 
-// Removed: useRouter import
+import { clearAllAppCache } from '@/lib/cache';
+import { toast } from '@/hooks/use-toast';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
   subsets: ['latin'],
 });
 
-// export const metadata: Metadata = { // Reverted to simpler head tags if layout is client
-// title: 'OrderEase POS',
-// description: 'Point of Sale system for restaurants',
-// };
-
-// AppContent is no longer needed as AuthProvider is removed.
-// We will integrate online status directly.
-
 export default function RootLayout({ children }: { children: React.ReactNode; }) {
   const isOnline = useOnlineStatus();
-  // Removed: currentUser, logout, isAdmin, isAuthLoading from useAuth()
-  // Removed: router from useRouter()
 
   const handleSyncData = () => {
     if (isOnline) {
@@ -59,7 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode; })
         description: "Reloading to fetch fresh data...",
       });
       setTimeout(() => {
-        window.location.reload(true); 
+        window.location.reload(true);
       }, 1500);
     } else {
       toast({
@@ -69,8 +54,6 @@ export default function RootLayout({ children }: { children: React.ReactNode; })
       });
     }
   };
-  
-  // Removed: handleLogout function
 
   return (
     <html lang="en">
@@ -122,7 +105,7 @@ export default function RootLayout({ children }: { children: React.ReactNode; })
                     <CreditCard className="mr-1.5 h-4 w-4" /> Supplier Payments
                   </Link>
                 </Button>
-                
+
                 {/* Reports */}
                 <Button asChild variant="ghost" size="sm">
                   <Link href="/reports/sales">
@@ -144,22 +127,23 @@ export default function RootLayout({ children }: { children: React.ReactNode; })
                     <PieChart className="mr-1.5 h-4 w-4" /> Profit & Loss
                   </Link>
                 </Button>
-                
-                {/* Settings & User Management */}
+
+                {/* Settings */}
                 <Button asChild variant="ghost" size="sm">
                   <Link href="/admin/settings/restaurant-profile">
                     <Building className="mr-1.5 h-4 w-4" /> Restaurant Profile
                   </Link>
                 </Button>
-                {/* Removed User Management Link */}
-                
+                 <Button asChild variant="ghost" size="sm">
+                  <Link href="/admin/settings/loyal-customers">
+                    <Gift className="mr-1.5 h-4 w-4" /> Loyal Customers
+                  </Link>
+                </Button>
+
                 {/* Sync Button */}
                 <Button variant="outline" size="sm" onClick={handleSyncData} title="Sync Data">
                   <RefreshCw className="mr-1.5 h-4 w-4" /> Sync
                 </Button>
-
-                {/* Removed Auth Buttons */}
-
               </div>
             </nav>
           </header>

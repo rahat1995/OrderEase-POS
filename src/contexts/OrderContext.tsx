@@ -2,16 +2,18 @@
 "use client";
 
 import type { ReactNode } from 'react';
-import React, { createContext, useContext, useState, useCallback } from 'react';
-import type { MenuItem, CartItem, Order, Voucher } from '@/types'; 
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'; // Added useEffect
+import type { MenuItem, CartItem, Order, Voucher, LoyalCustomerDiscount } from '@/types';
 import { toast } from "@/hooks/use-toast";
 import { saveOrderAction } from '@/app/actions/orderActions';
-import { validateVoucherAction } from '@/app/actions/voucherActions'; 
+import { validateVoucherAction } from '@/app/actions/voucherActions';
+import { fetchActiveLoyalCustomerDiscountByMobileAction } from '@/app/actions/loyalCustomerActions'; // New import
 
 interface OrderState {
   items: CartItem[];
   customerName: string;
   customerMobile: string;
+  appliedLoyalCustomerDiscount: LoyalCustomerDiscount | null; // New
   appliedVoucher: Voucher | null;
   voucherError: string | null;
   isVoucherLoading: boolean;
@@ -24,7 +26,7 @@ interface OrderContextType extends OrderState {
   removeItem: (itemId: string) => void;
   updateItemQuantity: (itemId: string, quantity: number) => void;
   setCustomerInfo: (name: string, mobile: string) => void;
-  generateOrderToken: () => string;
+  triggerLoyalCustomerCheck: (mobile: string) => Promise<void>; // New method to explicitly check
   getSubtotal: () => number;
   getDiscountAmount: () => number;
   getTotal: () => number;
@@ -32,7 +34,8 @@ interface OrderContextType extends OrderState {
   removeVoucher: () => void;
   applyManualDiscount: (type: 'percentage' | 'fixed', value: number) => void;
   removeManualDiscount: () => void;
-  finalizeOrder: () => Promise<Order | null>; // Removed currentUser parameter
+  clearActiveDiscount: () => void; // New utility
+  finalizeOrder: () => Promise<Order | null>;
   clearOrder: () => void;
 }
 
@@ -42,13 +45,48 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
   const [items, setItems] = useState<CartItem[]>([]);
   const [customerName, setCustomerName] = useState<string>('');
   const [customerMobile, setCustomerMobile] = useState<string>('');
-  
+
+  const [appliedLoyalCustomerDiscount, setAppliedLoyalCustomerDiscount] = useState<LoyalCustomerDiscount | null>(null); // New
+  const [isLoyalCustomerCheckLoading, setIsLoyalCustomerCheckLoading] = useState(false); // New
+
   const [appliedVoucher, setAppliedVoucher] = useState<Voucher | null>(null);
   const [voucherError, setVoucherError] = useState<string | null>(null);
   const [isVoucherLoading, setIsVoucherLoading] = useState(false);
 
   const [manualDiscountType, setManualDiscountType] = useState<'percentage' | 'fixed'>('fixed');
   const [manualDiscountValue, setManualDiscountValue] = useState<number>(0);
+
+  const clearActiveDiscount = useCallback(() => {
+    setAppliedLoyalCustomerDiscount(null);
+    setAppliedVoucher(null);
+    setVoucherError(null);
+    setManualDiscountType('fixed');
+    setManualDiscountValue(0);
+  }, []);
+
+  const triggerLoyalCustomerCheck = useCallback(async (mobile: string) => {
+    if (!mobile || mobile.trim().length < 5) { // Basic validation
+      if(appliedLoyalCustomerDiscount) clearActiveDiscount(); // Clear if mobile becomes invalid
+      return;
+    }
+    setIsLoyalCustomerCheckLoading(true);
+    try {
+      const discount = await fetchActiveLoyalCustomerDiscountByMobileAction(mobile.trim());
+      if (discount) {
+        clearActiveDiscount(); // Clear other discounts
+        setAppliedLoyalCustomerDiscount(discount);
+        toast({ title: "Loyal Customer Discount Applied", description: `${discount.discountValue}${discount.discountType === 'percentage' ? '%' : '$'} off for ${discount.customerName || discount.mobileNumber}.` });
+      } else {
+        // If no discount found for new mobile, and a loyal discount was previously applied, clear it.
+        if(appliedLoyalCustomerDiscount) setAppliedLoyalCustomerDiscount(null);
+      }
+    } catch (error) {
+      console.error("Error checking for loyal customer discount:", error);
+      toast({ title: "Error", description: "Could not check for loyal customer discount.", variant: "destructive" });
+    } finally {
+      setIsLoyalCustomerCheckLoading(false);
+    }
+  }, [clearActiveDiscount, appliedLoyalCustomerDiscount]);
 
 
   const addItem = useCallback((item: MenuItem) => {
@@ -96,22 +134,12 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
     try {
       setCustomerName(name);
       setCustomerMobile(mobile);
+      // Don't auto-trigger loyal customer check here. Let OrderCart handle it on blur.
     } catch (e) {
       console.error("OrderContext: Error in setCustomerInfo", e);
     }
   }, []);
 
-  const generateOrderToken = useCallback((): string => {
-    try {
-      const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
-      const timePart = Date.now().toString().slice(-6);
-      return `TKN-${timePart}-${randomPart}`;
-    } catch (e) {
-      console.error("OrderContext: Error in generateOrderToken", e);
-      return `TKN-ERROR-${Date.now()}`;
-    }
-  }, []);
-  
   const getSubtotal = useCallback((): number => {
     try {
       return items.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -121,16 +149,11 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [items]);
 
-  const removeManualDiscount = useCallback(() => {
-    try {
-      setManualDiscountType('fixed');
-      setManualDiscountValue(0);
-    } catch (e) {
-      console.error("OrderContext: Error in removeManualDiscount", e);
-    }
-  }, []);
-
   const applyVoucher = useCallback(async (code: string) => {
+    if (appliedLoyalCustomerDiscount) {
+      toast({ title: "Discount Conflict", description: "A loyal customer discount is already active. Cannot apply voucher.", variant: "default" });
+      return;
+    }
     try {
       if (!code.trim()) {
         setVoucherError("Please enter a voucher code.");
@@ -142,8 +165,8 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
       const subtotal = getSubtotal();
       const result = await validateVoucherAction(code, subtotal);
       if (result.success && result.voucher) {
+        clearActiveDiscount(); // Clear loyal and manual
         setAppliedVoucher(result.voucher);
-        removeManualDiscount(); 
         toast({ title: "Voucher Applied", description: `Discount for "${result.voucher.code}" applied.` });
       } else {
         setAppliedVoucher(null);
@@ -158,7 +181,7 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
     } finally {
         setIsVoucherLoading(false);
     }
-  }, [getSubtotal, removeManualDiscount]);
+  }, [getSubtotal, clearActiveDiscount, appliedLoyalCustomerDiscount]);
 
   const removeVoucher = useCallback(() => {
     try {
@@ -171,6 +194,10 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const applyManualDiscount = useCallback((type: 'percentage' | 'fixed', value: number) => {
+    if (appliedLoyalCustomerDiscount) {
+      toast({ title: "Discount Conflict", description: "A loyal customer discount is already active. Cannot apply manual discount.", variant: "default" });
+      return;
+    }
     try {
       if (value < 0) {
         toast({ title: "Invalid Discount", description: "Discount value cannot be negative.", variant: "destructive" });
@@ -180,24 +207,38 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
         toast({ title: "Invalid Discount", description: "Percentage discount cannot exceed 100%.", variant: "destructive" });
         return;
       }
+      clearActiveDiscount(); // Clear loyal and voucher
       setManualDiscountType(type);
       setManualDiscountValue(value);
-      setAppliedVoucher(null); 
-      setVoucherError(null);
       toast({ title: "Manual Discount Applied", description: `${value}${type === 'percentage' ? '%' : '$'} discount applied.` });
     } catch (e) {
       console.error("OrderContext: Error in applyManualDiscount", e);
       toast({ title: "Discount Error", description: "Could not apply manual discount.", variant: "destructive" });
     }
-  }, []);
+  }, [clearActiveDiscount, appliedLoyalCustomerDiscount]);
 
+  const removeManualDiscount = useCallback(() => {
+    try {
+      setManualDiscountType('fixed');
+      setManualDiscountValue(0);
+      // No toast here, clearing is usually silent unless part of a larger action
+    } catch (e) {
+      console.error("OrderContext: Error in removeManualDiscount", e);
+    }
+  }, []);
 
   const getDiscountAmount = useCallback((): number => {
     try {
       const subtotal = getSubtotal();
       let calculatedDiscount = 0;
 
-      if (appliedVoucher) {
+      if (appliedLoyalCustomerDiscount) {
+        if (appliedLoyalCustomerDiscount.discountType === 'percentage') {
+          calculatedDiscount = subtotal * (appliedLoyalCustomerDiscount.discountValue / 100);
+        } else {
+          calculatedDiscount = appliedLoyalCustomerDiscount.discountValue;
+        }
+      } else if (appliedVoucher) {
         if (appliedVoucher.discountType === 'percentage') {
           calculatedDiscount = subtotal * (appliedVoucher.discountValue / 100);
         } else {
@@ -210,58 +251,51 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
           calculatedDiscount = manualDiscountValue;
         }
       }
-      
-      calculatedDiscount = Math.max(0, calculatedDiscount); 
-      return Math.min(calculatedDiscount, subtotal); 
+
+      calculatedDiscount = Math.max(0, calculatedDiscount);
+      return Math.min(calculatedDiscount, subtotal);
     } catch (e) {
       console.error("OrderContext: Error in getDiscountAmount", e);
       return 0;
     }
-  }, [getSubtotal, appliedVoucher, manualDiscountType, manualDiscountValue]);
+  }, [getSubtotal, appliedLoyalCustomerDiscount, appliedVoucher, manualDiscountType, manualDiscountValue]);
 
   const getTotal = useCallback((): number => {
     try {
       return getSubtotal() - getDiscountAmount();
     } catch (e) {
       console.error("OrderContext: Error in getTotal", e);
-      return getSubtotal(); 
+      return getSubtotal();
     }
   }, [getSubtotal, getDiscountAmount]);
 
   const clearOrder = useCallback(() => {
     try {
       setItems([]);
-      setAppliedVoucher(null);
-      setVoucherError(null);
-      removeManualDiscount();
+      clearActiveDiscount(); // Clears all types of discounts
       setCustomerName('');
       setCustomerMobile('');
-      toast({ title: "Cart Cleared", description: "Ready for a new order." });
+      // No toast here, typically called after finalizeOrder which gives its own toast
     } catch (e) {
       console.error("OrderContext: Error in clearOrder", e);
-      setItems([]);
-      setAppliedVoucher(null);
-      removeManualDiscount();
-      setCustomerName('');
-      setCustomerMobile('');
       toast({ title: "Cart Clearing Error", description: "Some items may not have cleared.", variant: "destructive" });
     }
-  }, [removeManualDiscount]);
+  }, [clearActiveDiscount]);
 
-  const finalizeOrder = useCallback(async (): Promise<Order | null> => { // Removed currentUser parameter
+  const finalizeOrder = useCallback(async (): Promise<Order | null> => {
     if (items.length === 0) {
       toast({ title: "Cannot Finalize", description: "Cart is empty.", variant: "destructive" });
       return null;
     }
     let orderData: Order | null = null;
     try {
-      const token = generateOrderToken();
+      const token = Math.random().toString(36).substring(2, 8).toUpperCase(); // Simplified token
       const orderSubtotal = getSubtotal();
       const discountApplied = getDiscountAmount();
       const orderTotal = getTotal();
 
       orderData = {
-        id: token, 
+        id: token,
         token,
         items,
         subtotal: orderSubtotal,
@@ -270,31 +304,49 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
         customerName: customerName || undefined,
         customerMobile: customerMobile || undefined,
         orderDate: new Date().toISOString(),
-        appliedVoucherCode: appliedVoucher?.code,
-        voucherDiscountDetails: appliedVoucher ? { type: appliedVoucher.discountType, value: appliedVoucher.discountValue } : undefined,
-        manualDiscountType: !appliedVoucher && manualDiscountValue > 0 ? manualDiscountType : undefined,
-        manualDiscountValue: !appliedVoucher && manualDiscountValue > 0 ? manualDiscountValue : undefined,
-        // Removed: createdByUid and createdByName
+        appliedLoyalDiscountDetails: appliedLoyalCustomerDiscount ? {
+          mobileNumber: appliedLoyalCustomerDiscount.mobileNumber,
+          type: appliedLoyalCustomerDiscount.discountType,
+          value: appliedLoyalCustomerDiscount.discountValue,
+        } : undefined,
+        appliedVoucherCode: !appliedLoyalCustomerDiscount && appliedVoucher ? appliedVoucher.code : undefined,
+        voucherDiscountDetails: !appliedLoyalCustomerDiscount && appliedVoucher ? {
+          type: appliedVoucher.discountType,
+          value: appliedVoucher.discountValue
+        } : undefined,
+        manualDiscountType: !appliedLoyalCustomerDiscount && !appliedVoucher && manualDiscountValue > 0 ? manualDiscountType : undefined,
+        manualDiscountValue: !appliedLoyalCustomerDiscount && !appliedVoucher && manualDiscountValue > 0 ? manualDiscountValue : undefined,
       };
-    
+
       toast({ title: "Saving Order...", description: `Token: ${token}. Please wait.`});
-      const result = await saveOrderAction(orderData); 
+      const result = await saveOrderAction(orderData);
       if (result.success && result.orderId) {
         toast({ title: "Order Saved & Finalized", description: `DB ID: ${result.orderId}, Token: ${token}. Preparing for print.`});
-        return { ...orderData, id: result.orderId }; 
+        return { ...orderData, id: result.orderId };
       } else {
         throw new Error(result.error || "Failed to save order to database.");
       }
     } catch (error) {
       console.error("OrderContext: Error saving order:", error);
       toast({ title: "Error Saving Order", description: (error instanceof Error ? error.message : "Unknown error") + " Check console for details.", variant: "destructive" });
-      if (orderData) { 
+      if (orderData) {
         toast({ title: "Order Finalized (Locally)", description: `Token: ${orderData.token}. DB save failed. Preparing for print.` , variant: "destructive"});
-        return orderData; 
+        return orderData;
       }
       return null;
     }
-  }, [items, getSubtotal, getDiscountAmount, getTotal, customerName, customerMobile, generateOrderToken, appliedVoucher, manualDiscountType, manualDiscountValue]);
+  }, [
+      items,
+      getSubtotal,
+      getDiscountAmount,
+      getTotal,
+      customerName,
+      customerMobile,
+      appliedLoyalCustomerDiscount,
+      appliedVoucher,
+      manualDiscountType,
+      manualDiscountValue
+    ]);
 
 
   return (
@@ -303,16 +355,17 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
         items,
         customerName,
         customerMobile,
+        appliedLoyalCustomerDiscount,
         appliedVoucher,
         voucherError,
-        isVoucherLoading,
+        isVoucherLoading: isVoucherLoading || isLoyalCustomerCheckLoading, // Combine loading states
         manualDiscountType,
         manualDiscountValue,
         addItem,
         removeItem,
         updateItemQuantity,
         setCustomerInfo,
-        generateOrderToken,
+        triggerLoyalCustomerCheck,
         getSubtotal,
         getDiscountAmount,
         getTotal,
@@ -320,6 +373,7 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
         removeVoucher,
         applyManualDiscount,
         removeManualDiscount,
+        clearActiveDiscount,
         finalizeOrder,
         clearOrder,
       }}
