@@ -4,23 +4,46 @@ export interface MenuItem {
   name: string;
   price: number;
   imageUrl: string;
-  dataAiHint?: string; // Reinstated for AI hint
+  dataAiHint?: string;
 }
 
 export interface CartItem extends MenuItem {
   quantity: number;
 }
 
+export interface Voucher {
+  id: string;
+  code: string; // User-facing voucher code
+  codeLower: string; // For case-insensitive lookup
+  description?: string;
+  discountType: 'percentage' | 'fixed';
+  discountValue: number;
+  minOrderAmount?: number;
+  validFrom?: string; // ISO string
+  validUntil?: string; // ISO string
+  isActive: boolean;
+  usageLimit?: number; // Max number of times this voucher can be used in total
+  timesUsed: number; // How many times it has been used
+  createdAt: string; // ISO string
+}
+export type CreateVoucherInput = Omit<Voucher, 'id' | 'codeLower' | 'timesUsed' | 'createdAt'>;
+
 export interface Order {
   id: string; // Order ID / Firestore Document ID
   items: CartItem[];
   subtotal: number;
-  discountAmount: number;
+  discountAmount: number; // Actual discount value applied
   total: number;
   customerName?: string;
   customerMobile?: string;
   orderDate: string; // ISO string
   token: string; // User-facing token
+  appliedVoucherCode?: string; // Code of the voucher used
+  // Storing the discount details applied at the time of order, in case voucher changes later
+  voucherDiscountDetails?: { 
+    type: 'percentage' | 'fixed';
+    value: number;
+  };
 }
 
 // Costing Module Types
@@ -116,7 +139,6 @@ export interface LedgerTransaction {
   type: 'purchase' | 'payment';
   description: string;
   amount: number; // Positive for purchase, positive for payment (sign handled by type)
-  // runningBalance will be calculated on client
 }
 
 export interface SupplierLedgerData {
@@ -124,6 +146,6 @@ export interface SupplierLedgerData {
   openingBalance: number;
   transactions: LedgerTransaction[];
   totalPurchasesInPeriod: number;
-  totalPaymentsInPeriod:
+  totalPaymentsInPeriod: number;
   closingBalance: number; // This will be the last runningBalance
 }
