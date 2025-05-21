@@ -4,6 +4,7 @@ export interface MenuItem {
   name: string;
   price: number;
   imageUrl: string;
+  code?: string; // Added code field for menu items
   dataAiHint?: string;
 }
 export type CreateMenuItemInput = Omit<MenuItem, 'id'>;

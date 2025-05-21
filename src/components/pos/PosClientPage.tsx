@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import MenuItemCard from '@/components/pos/MenuItemCard';
 import OrderCart from '@/components/pos/OrderCart';
 import PrintReceipt from '@/components/pos/PrintReceipt';
@@ -9,7 +9,8 @@ import type { MenuItem, Order, RestaurantProfile, PrintRequestData } from '@/typ
 import { useOrder } from '@/contexts/OrderContext';
 import { fetchMenuItemsAction } from '@/app/actions/menuActions';
 import { fetchRestaurantProfileAction } from '@/app/actions/restaurantProfileActions';
-import { PackageOpen, Loader2 } from 'lucide-react';
+import { Input } from '@/components/ui/input'; // New import
+import { PackageOpen, Loader2, SearchIcon } from 'lucide-react'; // Added SearchIcon
 import { toast } from '@/hooks/use-toast';
 
 export default function PosClientPage() {
@@ -19,7 +20,7 @@ export default function PosClientPage() {
   const { clearOrder } = useOrder();
   const [restaurantProfile, setRestaurantProfile] = useState<RestaurantProfile | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
-
+  const [searchTerm, setSearchTerm] = useState(''); // New state for search term
 
   const loadInitialData = useCallback(async () => {
     console.log("PosClientPage: loadInitialData called");
@@ -56,6 +57,9 @@ export default function PosClientPage() {
       let description = "Could not fetch initial data. Please check the server console for errors.";
       if (error instanceof Error) {
         description = error.message;
+         if ((error as any).code === 'permission-denied' || (error as any).code === 'PERMISSION_DENIED') {
+          description = "Firestore permission denied. Please check your security rules for the 'menuItems' collection.";
+        }
       }
       toast({
         title: "Error Loading Data",
@@ -70,7 +74,7 @@ export default function PosClientPage() {
       setIsLoadingProfile(false);
       console.log("PosClientPage: loadInitialData finished");
     }
-  }, []); 
+  }, []);
 
   useEffect(() => {
     console.log("PosClientPage: useEffect for loadInitialData triggered");
@@ -98,21 +102,32 @@ export default function PosClientPage() {
         setTimeout(() => {
           try {
             clearOrder();
-            setPrintData(null); 
+            setPrintData(null);
             toast({ title: "Printing complete.", description: "Cart has been cleared." });
           } catch (e) {
             console.error("Error during post-print cleanup:", e);
             toast({title: "Cleanup Error", description: "Error clearing cart after print.", variant: "destructive"});
           }
-        }, 500); 
+        }, 500);
       };
 
-      const timer = setTimeout(printAction, 100); 
+      const timer = setTimeout(printAction, 100);
       return () => clearTimeout(timer);
     }
   }, [printData, clearOrder]);
 
   const isLoading = isLoadingMenu || isLoadingProfile;
+
+  const filteredMenuItems = useMemo(() => {
+    if (!searchTerm.trim()) {
+      return menuItems;
+    }
+    const lowercasedSearchTerm = searchTerm.toLowerCase();
+    return menuItems.filter(item =>
+      item.name.toLowerCase().includes(lowercasedSearchTerm) ||
+      (item.code && item.code.toLowerCase().includes(lowercasedSearchTerm))
+    );
+  }, [menuItems, searchTerm]);
 
   if (isLoading) {
     return (
@@ -126,23 +141,41 @@ export default function PosClientPage() {
   return (
     <div className="flex flex-col md:flex-row h-screen max-h-screen overflow-hidden bg-background">
       <main className="flex-1 p-4 md:p-6 overflow-y-auto">
-        <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-6 text-primary">Menu</h1>
-        {menuItems.length > 0 ? (
+        <div className="flex justify-between items-center mb-4 md:mb-6">
+          <h1 className="text-2xl md:text-3xl font-bold text-primary">Menu</h1>
+          <div className="relative w-full max-w-xs">
+            <Input
+              type="text"
+              placeholder="Search by name or code..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 pr-4 py-2 h-10 border rounded-lg shadow-sm focus:ring-accent focus:border-accent"
+            />
+            <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+          </div>
+        </div>
+
+        {filteredMenuItems.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-3">
-            {menuItems.map((item) => (
+            {filteredMenuItems.map((item) => (
               <MenuItemCard key={item.id} item={item} />
             ))}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center h-[calc(100vh-150px)] text-muted-foreground p-6 rounded-lg bg-card border shadow-md">
+          <div className="flex flex-col items-center justify-center h-[calc(100vh-200px)] text-muted-foreground p-6 rounded-lg bg-card border shadow-md">
             <PackageOpen className="w-20 h-20 mb-6 text-primary/70" />
-            <h2 className="text-2xl font-semibold mb-2">Menu is Empty</h2>
+            <h2 className="text-2xl font-semibold mb-2">
+              {searchTerm ? "No Matching Items" : "Menu is Empty"}
+            </h2>
             <p className="text-center max-w-md">
-              No menu items are currently available. Please add items to the 
-              <code className="bg-muted text-muted-foreground/80 px-1 py-0.5 rounded mx-1">public/menu-items.json</code> 
-              file.
+              {searchTerm
+                ? `No menu items found matching "${searchTerm}". Try a different search term or clear the search.`
+                : "No menu items are currently available. Please add items via Menu Management or check the 'public/menu-items.json' file."
+              }
             </p>
-            <p className="text-xs mt-4">If you recently added items and they are not appearing, ensure the JSON format is correct and try restarting your development server or use the 'Sync' button.</p>
+             {!searchTerm && menuItems.length === 0 && (
+                <p className="text-xs mt-4">If you recently added items and they are not appearing, ensure the JSON format is correct or check Firestore, and try using the 'Sync' button.</p>
+             )}
           </div>
         )}
       </main>
