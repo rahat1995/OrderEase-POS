@@ -1,11 +1,13 @@
 
 export interface MenuItem {
-  id: string; 
+  id: string;
   name: string;
   price: number;
   imageUrl: string;
   dataAiHint?: string;
 }
+export type CreateMenuItemInput = Omit<MenuItem, 'id'>;
+
 
 export interface CartItem extends MenuItem {
   quantity: number;
@@ -13,8 +15,8 @@ export interface CartItem extends MenuItem {
 
 export interface Voucher {
   id: string;
-  code: string; 
-  codeLower: string; 
+  code: string;
+  codeLower: string;
   description?: string;
   discountType: 'percentage' | 'fixed';
   discountValue: number;
@@ -22,24 +24,24 @@ export interface Voucher {
   validFrom?: string; // ISO string
   validUntil?: string; // ISO string
   isActive: boolean;
-  usageLimit?: number; 
-  timesUsed: number; 
+  usageLimit?: number;
+  timesUsed: number;
   createdAt: string; // ISO string
 }
 export type CreateVoucherInput = Omit<Voucher, 'id' | 'codeLower' | 'timesUsed' | 'createdAt'>;
 
 export interface Order {
-  id: string; 
+  id: string;
   items: CartItem[];
   subtotal: number;
-  discountAmount: number; 
+  discountAmount: number;
   total: number;
   customerName?: string;
   customerMobile?: string;
   orderDate: string; // ISO string
-  token: string; 
-  appliedVoucherCode?: string; 
-  voucherDiscountDetails?: { 
+  token: string;
+  appliedVoucherCode?: string;
+  voucherDiscountDetails?: {
     type: 'percentage' | 'fixed';
     value: number;
   };
@@ -51,37 +53,39 @@ export interface Order {
 export interface CostCategory {
   id: string;
   name: string;
+  nameLower?: string; // For case-insensitive checks
 }
 
-export type CreateCostCategoryInput = Omit<CostCategory, 'id'>;
+export type CreateCostCategoryInput = Omit<CostCategory, 'id' | 'nameLower'>;
 
 export interface PurchaseItem {
   id: string;
   name: string;
-  code?: string; 
+  code?: string;
   categoryId: string;
-  categoryName: string; 
+  categoryName: string;
 }
 export type CreatePurchaseItemInput = Omit<PurchaseItem, 'id'>;
 
 export interface Supplier {
   id: string;
   name: string;
+  nameLower?: string; // For case-insensitive checks
   address?: string;
-  mobile: string | undefined;
+  mobile?: string;
   contactPerson?: string;
   email?: string;
 }
-export type CreateSupplierInput = Omit<Supplier, 'id'>;
+export type CreateSupplierInput = Omit<Supplier, 'id' | 'nameLower'>;
 
 export interface PurchaseBill {
   id: string;
   billDate: string; // ISO string
-  supplierId?: string; 
-  supplierName?: string; 
+  supplierId?: string;
+  supplierName?: string;
   billNumber?: string;
   purchaseOrderNumber?: string;
-  totalAmount: number; 
+  totalAmount: number;
   createdAt: string; // ISO string, for record keeping
 }
 export type CreatePurchaseBillInput = Omit<PurchaseBill, 'id' | 'totalAmount' | 'createdAt'> & {
@@ -94,7 +98,7 @@ export interface CostEntry {
   purchaseBillId: string;
   purchaseItemId: string;
   purchaseItemName: string;
-  purchaseItemCode?: string; 
+  purchaseItemCode?: string;
   categoryId: string;
   categoryName: string;
   amount: number;
@@ -107,10 +111,10 @@ export type CreateCostEntryInput = Omit<CostEntry, 'id'>;
 export interface SupplierPayment {
   id: string;
   supplierId: string;
-  supplierName: string; 
+  supplierName: string;
   paymentDate: string; // ISO String
   amountPaid: number;
-  paymentMethod: string; 
+  paymentMethod: string;
   notes?: string;
   createdAt: string; // ISO String
 }
@@ -137,7 +141,7 @@ export interface LedgerTransaction {
   date: string; // ISO string
   type: 'purchase' | 'payment';
   description: string;
-  amount: number; 
+  amount: number;
 }
 
 export interface SupplierLedgerData {
@@ -146,5 +150,17 @@ export interface SupplierLedgerData {
   transactions: LedgerTransaction[];
   totalPurchasesInPeriod: number;
   totalPaymentsInPeriod: number;
-  closingBalance: number; 
+  closingBalance: number;
 }
+
+// Restaurant Profile
+export interface RestaurantProfile {
+  id: string; // Should be a fixed ID e.g., "main_config"
+  name?: string;
+  address?: string;
+  contactNumber?: string;
+  logoUrl?: string;
+  updatedAt?: string; // ISO string
+}
+
+export type UpdateRestaurantProfileInput = Partial<Omit<RestaurantProfile, 'id' | 'updatedAt'>>;

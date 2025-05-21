@@ -1,7 +1,7 @@
 
-"use client"; // Required for the hook
+"use client"; 
 
-import type { Metadata } from 'next'; // Still can have metadata in client component layout
+import type { Metadata } from 'next'; 
 import { Geist } from 'next/font/google';
 import Link from 'next/link';
 import './globals.css';
@@ -19,22 +19,20 @@ import {
   PieChart,
   Users,
   WifiOff,
-  RefreshCw // Icon for Sync
+  RefreshCw,
+  Building, // For Restaurant Profile / Settings
+  SettingsIcon // Generic Settings Icon
 } from 'lucide-react';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { cn } from '@/lib/utils';
-import { clearAllAppCache } from '@/lib/cache'; // Import cache utility
-import { toast } from '@/hooks/use-toast'; // Import toast
+import { clearAllAppCache } from '@/lib/cache'; 
+import { toast } from '@/hooks/use-toast'; 
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
   subsets: ['latin'],
 });
 
-// export const metadata: Metadata = { // Metadata can be exported from client components
-//   title: 'OrderEase POS',
-//   description: 'Point of Sale system for restaurants',
-// };
 
 export default function RootLayout({
   children,
@@ -50,9 +48,8 @@ export default function RootLayout({
         title: "Local Cache Cleared",
         description: "Reloading to fetch fresh data...",
       });
-      // Wait a bit for the toast to be visible before reloading
       setTimeout(() => {
-        window.location.reload(true); // Force a hard reload
+        window.location.reload(true); 
       }, 1500);
     } else {
       toast({
@@ -66,10 +63,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        {/* Metadata tags can be placed directly in head if not using the metadata object */}
         <title>OrderEase POS</title>
         <meta name="description" content="Point of Sale system for restaurants" />
-        {/* Add other global metadata tags here if needed */}
       </head>
       <body className={`${geistSans.variable} antialiased bg-secondary/30 text-foreground`}>
         <OrderProvider>
@@ -79,7 +74,7 @@ export default function RootLayout({
               <span>You are currently offline. Changes will be synced when you reconnect.</span>
             </div>
           )}
-          <header className={cn("bg-background shadow-md sticky z-50", isOnline ? "top-0" : "top-10")}> {/* Adjust sticky top based on offline banner */}
+          <header className={cn("bg-background shadow-md sticky z-50", isOnline ? "top-0" : "top-10")}>
             <nav className="container mx-auto px-4 py-2 flex justify-between items-center">
               <Link href="/" legacyBehavior passHref>
                 <a className="text-2xl font-bold text-primary hover:text-accent transition-colors">
@@ -138,6 +133,13 @@ export default function RootLayout({
                   </Link>
                 </Button>
                 
+                {/* Settings */}
+                 <Button asChild variant="ghost" size="sm">
+                  <Link href="/admin/settings/restaurant-profile">
+                    <Building className="mr-1.5 h-4 w-4" /> Restaurant Profile
+                  </Link>
+                </Button>
+                
                 {/* Sync Button */}
                 <Button variant="outline" size="sm" onClick={handleSyncData} title="Sync Data">
                   <RefreshCw className="mr-1.5 h-4 w-4" /> Sync
@@ -145,7 +147,7 @@ export default function RootLayout({
               </div>
             </nav>
           </header>
-          <div className={cn("min-h-[calc(100vh-var(--header-height,60px))]", !isOnline && "pt-10")}> {/* Adjust padding top if offline banner is visible */}
+          <div className={cn("min-h-[calc(100vh-var(--header-height,60px))]", !isOnline && "pt-10")}>
             {children}
           </div>
           <Toaster />
