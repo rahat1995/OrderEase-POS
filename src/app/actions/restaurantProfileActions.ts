@@ -21,7 +21,7 @@ export async function fetchRestaurantProfileAction(): Promise<RestaurantProfile 
         name: data.name || '',
         address: data.address || '',
         contactNumber: data.contactNumber || '',
-        logoUrl: data.logoUrl || '',
+        logoUrl: data.logoUrl || '', // Keep as empty string if that's what's stored
         updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate().toISOString() : undefined,
       } as RestaurantProfile;
     } else {
@@ -36,9 +36,7 @@ export async function fetchRestaurantProfileAction(): Promise<RestaurantProfile 
     }
   } catch (e) {
     console.error('[Server Action] fetchRestaurantProfileAction: Error fetching profile', e);
-    // In case of an error, return a default structure or null based on how you want to handle it client-side
-    // Returning null might be better to indicate an actual fetch failure vs. no data found.
-     return {
+    return {
         id: PROFILE_DOC_ID,
         name: 'Error loading data',
         address: '',
@@ -54,19 +52,17 @@ export async function updateRestaurantProfileAction(
 ): Promise<{ success: boolean; error?: string; profile?: RestaurantProfile }> {
   try {
     const docRef = doc(db, PROFILE_COLLECTION, PROFILE_DOC_ID);
-    let currentProfile = await fetchRestaurantProfileAction(); // Get current profile to check old logo
-    let logoUrlToSave = currentProfile?.logoUrl;
+    let currentProfile = await fetchRestaurantProfileAction();
+    let logoUrlToSave: string | undefined = currentProfile?.logoUrl;
 
     if (newLogoFile) {
-      // If there's an old logo and it's a Firebase Storage URL, delete it
       if (logoUrlToSave && logoUrlToSave.includes('firebasestorage.googleapis.com')) {
         await deleteImageAction(logoUrlToSave);
       }
 
-      // Upload new logo
       const formData = new FormData();
       formData.append('imageFile', newLogoFile);
-      formData.append('folderName', 'restaurant_assets'); // Optional: specify a folder
+      formData.append('folderName', 'restaurant_assets');
 
       const uploadResult = await uploadImageAction(formData);
       if (uploadResult.success && uploadResult.imageUrl) {
@@ -75,23 +71,36 @@ export async function updateRestaurantProfileAction(
         throw new Error(uploadResult.error || 'Logo upload failed.');
       }
     } else if (data.logoUrl === '' && currentProfile?.logoUrl && currentProfile.logoUrl.includes('firebasestorage.googleapis.com')) {
-      // If logoUrl is explicitly set to empty string in data (meaning user wants to remove it)
-      // and there was an old logo from Firebase Storage
+      // User explicitly wants to remove the logo by clearing the field, and there was an old Firebase Storage logo.
       await deleteImageAction(currentProfile.logoUrl);
-      logoUrlToSave = undefined; // Mark to remove from Firestore or set placeholder later if needed
+      logoUrlToSave = ''; // Set to empty string to reflect removal, which Firestore allows.
+    } else if (data.logoUrl !== undefined) {
+      // If data.logoUrl is provided (and not empty, handled above), it means the user might have manually entered a URL
+      // or the existing URL was passed through.
+      logoUrlToSave = data.logoUrl;
     }
+    // If data.logoUrl is undefined, it means no change was intended for the logo URL from the form's text fields,
+    // and logoUrlToSave retains its value from currentProfile or from newLogoFile upload.
 
 
-    const dataToSave: UpdateRestaurantProfileInput & { updatedAt: Timestamp; logoUrl?: string } = {
+    const dataForFirestore: { name: string; address: string; contactNumber: string; updatedAt: Timestamp; logoUrl?: string } = {
       name: data.name?.trim() || '',
       address: data.address?.trim() || '',
       contactNumber: data.contactNumber?.trim() || '',
-      logoUrl: logoUrlToSave || undefined, // Ensure it's undefined if no logo, not empty string directly
       updatedAt: Timestamp.now(),
     };
 
-    await setDoc(docRef, dataToSave, { merge: true });
-    const updatedProfile = await fetchRestaurantProfileAction(); // Fetch again to return the full profile
+    // Only include logoUrl in dataForFirestore if it's a non-empty string or an empty string (explicitly cleared).
+    // If logoUrlToSave is undefined (e.g. new profile, no logo uploaded), it will be omitted from Firestore.
+    if (logoUrlToSave !== undefined) {
+      dataForFirestore.logoUrl = logoUrlToSave;
+    }
+    // If logoUrlToSave is undefined (e.g. new profile and no logo ever set or uploaded), 
+    // the logoUrl field will be omitted from the setDoc call, which is fine with Firestore.
+    // If logoUrlToSave is an empty string (user cleared it), it will be saved as an empty string.
+
+    await setDoc(docRef, dataForFirestore, { merge: true });
+    const updatedProfile = await fetchRestaurantProfileAction();
 
     return { success: true, profile: updatedProfile || undefined };
   } catch (e) {
@@ -100,12 +109,10 @@ export async function updateRestaurantProfileAction(
     if (e instanceof Error) {
       errorMessage = e.message;
     }
-     // Check for specific Firebase errors if needed
     if (typeof e === 'object' && e !== null && 'code' in e && typeof (e as any).code === 'string') {
         const firebaseError = e as { code: string; message: string };
         errorMessage = `Firebase Error (${firebaseError.code}): ${firebaseError.message}`;
          if (firebaseError.code === 'storage/object-not-found' && newLogoFile) {
-            // This can happen if deleteImageAction tries to delete a non-existent old logo - generally okay to proceed
             console.warn("Old logo not found during update, proceeding with new logo upload.");
         } else if (firebaseError.code === 'storage/no-default-bucket' && newLogoFile) {
              return { success: false, error: `Firebase Storage: No default bucket found. Please ensure Storage is enabled and 'storageBucket' in .env.local is correct.` };
