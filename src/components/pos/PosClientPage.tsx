@@ -5,24 +5,35 @@ import React, { useState, useEffect, useCallback } from 'react';
 import MenuItemCard from '@/components/pos/MenuItemCard';
 import OrderCart from '@/components/pos/OrderCart';
 import PrintReceipt from '@/components/pos/PrintReceipt';
-import type { MenuItem, Order } from '@/types';
+import type { MenuItem, Order, RestaurantProfile, PrintRequestData } from '@/types';
 import { useOrder } from '@/contexts/OrderContext';
 import { fetchMenuItemsAction } from '@/app/actions/menuActions';
+import { fetchRestaurantProfileAction } from '@/app/actions/restaurantProfileActions';
 import { PackageOpen, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 export default function PosClientPage() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [orderForPrint, setOrderForPrint] = useState<Order | null>(null);
+  const [isLoadingMenu, setIsLoadingMenu] = useState(true);
+  const [printData, setPrintData] = useState<PrintRequestData | null>(null);
   const { clearOrder } = useOrder();
+  const [restaurantProfile, setRestaurantProfile] = useState<RestaurantProfile | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
 
-  const loadMenuItems = useCallback(async () => {
-    console.log("PosClientPage: loadMenuItems called");
-    setIsLoading(true);
+
+  const loadInitialData = useCallback(async () => {
+    console.log("PosClientPage: loadInitialData called");
+    setIsLoadingMenu(true);
+    setIsLoadingProfile(true);
     try {
-      const items = await fetchMenuItemsAction();
+      const [items, profile] = await Promise.all([
+        fetchMenuItemsAction(),
+        fetchRestaurantProfileAction()
+      ]);
+
       setMenuItems(items);
+      setRestaurantProfile(profile);
+
       if (items.length === 0) {
         toast({
           title: "Menu Information",
@@ -31,38 +42,44 @@ export default function PosClientPage() {
           duration: 7000,
         });
       }
+       if (!profile || !profile.name) {
+        toast({
+          title: "Restaurant Profile Incomplete",
+          description: "Restaurant details are missing. Please set them up in Admin > Settings.",
+          variant: "default",
+          duration: 7000,
+        });
+      }
+
     } catch (error) {
-      console.error("PosClientPage: Failed to load menu items:", error);
-      let description = "Could not fetch menu items. Please check the server console for errors related to reading public/menu-items.json.";
+      console.error("PosClientPage: Failed to load initial data:", error);
+      let description = "Could not fetch initial data. Please check the server console for errors.";
       if (error instanceof Error) {
         description = error.message;
-        if ((error as any).code === 'ENOENT') {
-          description = "The menu file (public/menu-items.json) was not found. Please create it.";
-        }
       }
       toast({
-        title: "Error Loading Menu",
+        title: "Error Loading Data",
         description: description,
         variant: "destructive",
         duration: 10000,
       });
       setMenuItems([]);
+      setRestaurantProfile(null);
     } finally {
-      setIsLoading(false);
-      console.log("PosClientPage: loadMenuItems finished");
+      setIsLoadingMenu(false);
+      setIsLoadingProfile(false);
+      console.log("PosClientPage: loadInitialData finished");
     }
-  // Removed `isLoading` from dependency array to prevent potential infinite loop
-  // eslint-disable-next-line react-hooks/exhaustive-deps 
   }, []); 
 
   useEffect(() => {
-    console.log("PosClientPage: useEffect for loadMenuItems triggered");
-    loadMenuItems();
-  }, [loadMenuItems]); // This will run once on mount as loadMenuItems is stable
+    console.log("PosClientPage: useEffect for loadInitialData triggered");
+    loadInitialData();
+  }, [loadInitialData]);
 
-  const handlePrintRequest = useCallback(async (order: Order | null) => {
-    if (order) {
-        setOrderForPrint(order);
+  const handlePrintRequest = useCallback(async (data: PrintRequestData) => {
+    if (data.order) {
+        setPrintData(data); // data already includes profile
     } else {
         toast({
             title: "Order Finalization Failed",
@@ -74,15 +91,14 @@ export default function PosClientPage() {
 
 
   useEffect(() => {
-    if (orderForPrint) {
-      console.log("PosClientPage: Order ready for print", orderForPrint);
+    if (printData && printData.order) {
+      console.log("PosClientPage: Order ready for print", printData);
       const printAction = () => {
         window.print();
-        // Using a timeout to ensure print dialog doesn't block subsequent UI updates immediately
         setTimeout(() => {
           try {
             clearOrder();
-            setOrderForPrint(null); // Clear the orderForPrint state
+            setPrintData(null); 
             toast({ title: "Printing complete.", description: "Cart has been cleared." });
           } catch (e) {
             console.error("Error during post-print cleanup:", e);
@@ -91,17 +107,18 @@ export default function PosClientPage() {
         }, 500); 
       };
 
-      // Delay slightly to ensure DOM update before print dialog
       const timer = setTimeout(printAction, 100); 
       return () => clearTimeout(timer);
     }
-  }, [orderForPrint, clearOrder]);
+  }, [printData, clearOrder]);
+
+  const isLoading = isLoadingMenu || isLoadingProfile;
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="ml-4 text-lg">Loading Menu...</p>
+        <p className="ml-4 text-lg">Loading POS...</p>
       </div>
     );
   }
@@ -125,14 +142,14 @@ export default function PosClientPage() {
               <code className="bg-muted text-muted-foreground/80 px-1 py-0.5 rounded mx-1">public/menu-items.json</code> 
               file.
             </p>
-            <p className="text-xs mt-4">If you recently added items and they are not appearing, ensure the JSON format is correct and try restarting your development server.</p>
+            <p className="text-xs mt-4">If you recently added items and they are not appearing, ensure the JSON format is correct and try restarting your development server or use the 'Sync' button.</p>
           </div>
         )}
       </main>
       <aside className="w-full md:w-96 lg:w-[400px] xl:w-[450px] bg-card border-l border-border max-h-screen h-full">
-        <OrderCart onPrintRequest={handlePrintRequest} />
+        <OrderCart onPrintRequest={handlePrintRequest} restaurantProfile={restaurantProfile} />
       </aside>
-      {orderForPrint && <PrintReceipt order={orderForPrint} />}
+      {printData && printData.order && <PrintReceipt order={printData.order} profile={printData.profile} />}
     </div>
   );
 }

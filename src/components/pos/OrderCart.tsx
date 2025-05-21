@@ -10,14 +10,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Trash2, PlusCircle, MinusCircle, Printer, User, Phone, ShoppingCart, Loader2, Ticket, XCircle, Percent, DollarSign, Eraser } from 'lucide-react';
-import type { CartItem, Order, Voucher } from '@/types'; 
+import type { CartItem, Order, Voucher, RestaurantProfile, PrintRequestData } from '@/types'; 
 import { toast } from '@/hooks/use-toast';
 
 interface OrderCartProps {
-  onPrintRequest: (order: Order | null) => void;
+  onPrintRequest: (data: PrintRequestData) => void;
+  restaurantProfile: RestaurantProfile | null;
 }
 
-export default function OrderCart({ onPrintRequest }: OrderCartProps) {
+export default function OrderCart({ onPrintRequest, restaurantProfile }: OrderCartProps) {
   const {
     items,
     removeItem,
@@ -68,7 +69,7 @@ export default function OrderCart({ onPrintRequest }: OrderCartProps) {
     }
     await applyVoucher(currentVoucherCode);
     // If voucher applied successfully, context clears manual discount. Update local state:
-    if (appliedVoucher) {
+    if (appliedVoucher) { // Check appliedVoucher from context, not the local variable
         setCurrentManualDiscountType('fixed');
         setCurrentManualDiscountValue('');
     }
@@ -96,8 +97,8 @@ export default function OrderCart({ onPrintRequest }: OrderCartProps) {
 
   const handleRemoveManualDiscount = () => {
     removeManualDiscount();
-    setCurrentManualDiscountType('fixed');
-    setCurrentManualDiscountValue('');
+    // setCurrentManualDiscountType('fixed'); // Already handled in context
+    // setCurrentManualDiscountValue(''); // Already handled in context
   }
 
   const handleSetCustomerInfo = () => {
@@ -110,7 +111,7 @@ export default function OrderCart({ onPrintRequest }: OrderCartProps) {
     
     const order = await finalizeOrder();
     
-    onPrintRequest(order); 
+    onPrintRequest({ order, profile: restaurantProfile }); 
     setIsProcessingOrder(false);
     // clearOrder is called by PosClientPage after printing
   };
@@ -151,7 +152,7 @@ export default function OrderCart({ onPrintRequest }: OrderCartProps) {
                       type="number"
                       value={item.quantity}
                       onChange={(e) => updateItemQuantity(item.id, parseInt(e.target.value) || 0)}
-                      className="w-8 text-center h-6 text-xs px-1 py-0.5" /* Reduced size & padding */
+                      className="w-10 text-center h-7 text-sm px-1.5 py-1" 
                       aria-label={`${item.name} quantity`}
                       disabled={isProcessing}
                     />
@@ -204,7 +205,7 @@ export default function OrderCart({ onPrintRequest }: OrderCartProps) {
               value={currentVoucherCode}
               onChange={(e) => setCurrentVoucherCode(e.target.value)}
               className="flex-grow h-8 text-xs"
-              disabled={isProcessing || !!appliedVoucher || manualDiscountValue > 0}
+              disabled={isProcessing || manualDiscountValue > 0} // Disable if manual discount is active
             />
             {appliedVoucher ? (
               <Button onClick={handleRemoveVoucher} variant="outline" size="sm" className="h-8 px-2.5 text-xs" disabled={isProcessing}>
@@ -231,7 +232,7 @@ export default function OrderCart({ onPrintRequest }: OrderCartProps) {
             <Select 
               value={currentManualDiscountType} 
               onValueChange={(value: 'percentage' | 'fixed') => setCurrentManualDiscountType(value)}
-              disabled={isProcessing || !!appliedVoucher}
+              disabled={isProcessing || !!appliedVoucher} // Disable if voucher is active
             >
               <SelectTrigger className="w-[120px] h-8 text-xs">
                 <SelectValue />
@@ -247,7 +248,7 @@ export default function OrderCart({ onPrintRequest }: OrderCartProps) {
               value={currentManualDiscountValue}
               onChange={(e) => setCurrentManualDiscountValue(e.target.value)}
               className="flex-grow h-8 text-xs"
-              disabled={isProcessing || !!appliedVoucher}
+              disabled={isProcessing || !!appliedVoucher} // Disable if voucher is active
             />
             {manualDiscountValue > 0 ? (
                  <Button onClick={handleRemoveManualDiscount} variant="outline" size="sm" className="h-8 px-2.5 text-xs" disabled={isProcessing || !!appliedVoucher}>
@@ -261,7 +262,7 @@ export default function OrderCart({ onPrintRequest }: OrderCartProps) {
           </div>
            {manualDiscountValue > 0 && !appliedVoucher && (
              <p className="text-xs text-green-600 mt-0.5">
-               Manual discount: {manualDiscountType === 'percentage' ? `${manualDiscountValue}%` : `$${parseFloat(manualDiscountValue).toFixed(2)}`} off.
+               Manual discount: {manualDiscountType === 'percentage' ? `${manualDiscountValue}%` : `$${parseFloat(currentManualDiscountValue || "0").toFixed(2)}`} off.
              </p>
            )}
         </div>

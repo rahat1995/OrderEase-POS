@@ -164,3 +164,9 @@ export interface RestaurantProfile {
 }
 
 export type UpdateRestaurantProfileInput = Partial<Omit<RestaurantProfile, 'id' | 'updatedAt'>>;
+
+// Prop type for OrderCart onPrintRequest
+export interface PrintRequestData {
+  order: Order | null;
+  profile: RestaurantProfile | null;
+}

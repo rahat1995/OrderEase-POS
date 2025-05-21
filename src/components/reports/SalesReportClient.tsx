@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { format, subDays } from 'date-fns';
-import { Calendar as CalendarIcon, Search, Loader2, User, Phone, ShoppingBag, BarChart3 } from 'lucide-react';
+import { Calendar as CalendarIcon, Search, Loader2, User, Phone, ShoppingBag, BarChart3, Printer } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -27,8 +27,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-import type { Order, CartItem } from '@/types';
+import type { Order, RestaurantProfile } from '@/types';
 import { fetchOrdersAction } from '@/app/actions/orderActions';
+import { fetchRestaurantProfileAction } from '@/app/actions/restaurantProfileActions';
+import ReportPrintHeader from '@/components/reports/ReportPrintHeader';
 import { toast } from '@/hooks/use-toast';
 
 interface ItemSalesReport {
@@ -46,11 +48,28 @@ export default function SalesReportClient() {
   const [customerNameQuery, setCustomerNameQuery] = useState('');
   const [customerMobileQuery, setCustomerMobileQuery] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
-  const [isLoading, setIsLoading] = useState(true); // Start true for initial load
+  const [isLoading, setIsLoading] = useState(true); 
   const [error, setError] = useState<string | null>(null);
   const [itemSalesReport, setItemSalesReport] = useState<ItemSalesReport>({});
   const [lastSearchCriteria, setLastSearchCriteria] = useState<{name?:string, mobile?:string}>({});
+  const [restaurantProfile, setRestaurantProfile] = useState<RestaurantProfile | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
 
+  const loadProfile = useCallback(async () => {
+    setIsLoadingProfile(true);
+    try {
+      const profile = await fetchRestaurantProfileAction();
+      setRestaurantProfile(profile);
+    } catch (e) {
+      toast({title: "Error Loading Profile", description: (e as Error).message, variant: "destructive"});
+    } finally {
+      setIsLoadingProfile(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
 
   const calculateItemSales = useCallback((currentOrders: Order[]): ItemSalesReport => {
     const report: ItemSalesReport = {};
@@ -133,10 +152,11 @@ export default function SalesReportClient() {
 
 
   useEffect(() => {
-    // Initial fetch on component mount
-    guardedFetchOrders(dateRange, customerNameQuery, customerMobileQuery);
+    if(!isLoadingProfile){ // Fetch orders only after profile has been attempted to load
+        guardedFetchOrders(dateRange, customerNameQuery, customerMobileQuery);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only on mount, subsequent fetches are manual via button
+  }, [isLoadingProfile]); // Re-fetch when profile loading finishes (or other deps change later)
   
   const totalSales = orders.reduce((sum, order) => sum + order.total, 0);
   const totalDiscount = orders.reduce((sum, order) => sum + order.discountAmount, 0);
@@ -144,10 +164,22 @@ export default function SalesReportClient() {
 
   const isCustomerSearchActive = !!(lastSearchCriteria.name || lastSearchCriteria.mobile);
 
+  const handlePrint = () => {
+    window.print();
+  };
+
+  if (isLoadingProfile) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="ml-4 text-lg">Loading profile...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <Card className="shadow-md">
+      <Card className="shadow-md no-print">
         <CardHeader>
           <CardTitle>Filter Orders</CardTitle>
           <CardDescription>
@@ -191,7 +223,7 @@ export default function SalesReportClient() {
                         mode="range"
                         defaultMonth={dateRange?.from}
                         selected={dateRange}
-                        onSelect={(newRange) => setDateRange(newRange || {})}
+                        onSelect={(newRange) => setDateRange(newRange || {from:undefined, to:undefined})}
                         numberOfMonths={2}
                     />
                     </PopoverContent>
@@ -220,16 +252,20 @@ export default function SalesReportClient() {
                     />
                 </div>
             </div>
+            <div className="flex space-x-2">
              <Button onClick={() => guardedFetchOrders(dateRange, customerNameQuery, customerMobileQuery)} disabled={isLoading} className="w-full sm:w-auto bg-accent hover:bg-accent/90">
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
                 Search Orders
             </Button>
+            <Button onClick={handlePrint} disabled={isLoading || orders.length === 0} variant="outline" className="w-full sm:w-auto">
+                <Printer className="mr-2 h-4 w-4" /> Print Report
+            </Button>
+            </div>
         </CardContent>
       </Card>
 
-
       {error && (
-        <Alert variant="destructive">
+        <Alert variant="destructive" className="no-print">
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
@@ -251,121 +287,124 @@ export default function SalesReportClient() {
             </CardContent>
         </Card>
       )}
-
-      {!isLoading && orders.length > 0 && (
-        <>
-          <Card className="shadow-md">
-            <CardHeader>
-                <CardTitle className="flex items-center">
-                    <BarChart3 className="mr-2 h-6 w-6 text-accent"/>
-                    {isCustomerSearchActive ? `Summary for ${lastSearchCriteria.name || lastSearchCriteria.mobile || 'Customer'}` : 'Overall Summary'}
-                </CardTitle>
-                <CardDescription>
-                    {isCustomerSearchActive 
-                        ? `Showing data for orders matching the customer criteria ${dateRange?.from || dateRange?.to ? 'within the selected date range' : 'across all dates'}.`
-                        : `Summary for all orders within the selected date range.`
-                    }
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 text-sm">
-                <div className="p-3 border rounded-md bg-background shadow">
-                    <p className="text-muted-foreground">Total Orders</p>
-                    <p className="text-2xl font-bold">{orders.length}</p>
-                </div>
-                <div className="p-3 border rounded-md bg-background shadow">
-                    <p className="text-muted-foreground">Total Sales Value</p>
-                    <p className="text-2xl font-bold text-accent">${totalSales.toFixed(2)}</p>
-                </div>
-                <div className="p-3 border rounded-md bg-background shadow">
-                    <p className="text-muted-foreground">Total Discount Given</p>
-                    <p className="text-2xl font-bold">${totalDiscount.toFixed(2)}</p>
-                </div>
-                <div className="p-3 border rounded-md bg-background shadow">
-                    <p className="text-muted-foreground">Total Items Sold</p>
-                    <p className="text-2xl font-bold">{totalItemsSoldOverall}</p>
-                </div>
-            </CardContent>
-          </Card>
-
-          {Object.keys(itemSalesReport).length > 0 && !isCustomerSearchActive && (
+      
+      <div className="printable-area space-y-6">
+        <ReportPrintHeader profile={restaurantProfile} reportTitle="Sales Report" />
+        {!isLoading && orders.length > 0 && (
+          <>
             <Card className="shadow-md">
               <CardHeader>
-                <CardTitle className="flex items-center">
-                    <ShoppingBag className="mr-2 h-6 w-6 text-accent"/>
-                    Item-wise Sales Report
-                </CardTitle>
-                <CardDescription>Breakdown of items sold in the selected period.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-[300px] w-full border rounded-md">
-                  <Table>
-                    <TableHeader className="sticky top-0 bg-muted z-10">
-                      <TableRow>
-                        <TableHead>Item Name</TableHead>
-                        <TableHead className="text-right">Quantity Sold</TableHead>
-                        <TableHead className="text-right">Total Value</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {Object.entries(itemSalesReport)
-                        .sort(([, a], [, b]) => b.quantity - a.quantity) 
-                        .map(([itemName, data]) => (
-                        <TableRow key={itemName}>
-                          <TableCell className="font-medium">{itemName}</TableCell>
-                          <TableCell className="text-right">{data.quantity}</TableCell>
-                          <TableCell className="text-right">${data.totalValue.toFixed(2)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </ScrollArea>
-              </CardContent>
-            </Card>
-          )}
-      
-          <Card className="shadow-md">
-              <CardHeader>
-                  <CardTitle>Order Details</CardTitle>
+                  <CardTitle className="flex items-center">
+                      <BarChart3 className="mr-2 h-6 w-6 text-accent no-print"/>
+                      {isCustomerSearchActive ? `Summary for ${lastSearchCriteria.name || lastSearchCriteria.mobile || 'Customer'}` : 'Overall Summary'}
+                  </CardTitle>
                   <CardDescription>
-                      {isCustomerSearchActive
-                          ? `Showing orders for ${lastSearchCriteria.name || lastSearchCriteria.mobile || 'selected customer'}${dateRange?.from || dateRange?.to ? ' within the selected date range' : ' (all dates)'}.`
-                          : `All orders within the selected date range.`
+                      {isCustomerSearchActive 
+                          ? `Showing data for orders matching the customer criteria ${dateRange?.from || dateRange?.to ? 'within the selected date range' : 'across all dates'}.`
+                          : `Summary for all orders ${dateRange?.from || dateRange?.to ? 'within the selected date range' : 'for all dates'}.`
                       }
                   </CardDescription>
               </CardHeader>
-              <CardContent>
-                  <ScrollArea className="h-[500px] w-full border rounded-md">
-                  <Table>
+              <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+                  <div className="p-3 border rounded-md bg-background shadow">
+                      <p className="text-muted-foreground">Total Orders</p>
+                      <p className="text-2xl font-bold">{orders.length}</p>
+                  </div>
+                  <div className="p-3 border rounded-md bg-background shadow">
+                      <p className="text-muted-foreground">Total Sales Value</p>
+                      <p className="text-2xl font-bold text-accent">${totalSales.toFixed(2)}</p>
+                  </div>
+                  <div className="p-3 border rounded-md bg-background shadow">
+                      <p className="text-muted-foreground">Total Discount Given</p>
+                      <p className="text-2xl font-bold">${totalDiscount.toFixed(2)}</p>
+                  </div>
+                  <div className="p-3 border rounded-md bg-background shadow">
+                      <p className="text-muted-foreground">Total Items Sold</p>
+                      <p className="text-2xl font-bold">{totalItemsSoldOverall}</p>
+                  </div>
+              </CardContent>
+            </Card>
+
+            {Object.keys(itemSalesReport).length > 0 && !isCustomerSearchActive && (
+              <Card className="shadow-md">
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                      <ShoppingBag className="mr-2 h-6 w-6 text-accent no-print"/>
+                      Item-wise Sales Report
+                  </CardTitle>
+                  <CardDescription>Breakdown of items sold in the selected period.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[300px] w-full border rounded-md">
+                    <Table>
                       <TableHeader className="sticky top-0 bg-muted z-10">
-                      <TableRow>
-                          <TableHead className="w-[150px]">Order ID (Token)</TableHead>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Customer</TableHead>
-                          <TableHead className="text-right">Items</TableHead>
-                          <TableHead className="text-right">Subtotal</TableHead>
-                          <TableHead className="text-right">Discount</TableHead>
-                          <TableHead className="text-right">Total</TableHead>
-                      </TableRow>
+                        <TableRow>
+                          <TableHead>Item Name</TableHead>
+                          <TableHead className="text-right">Quantity Sold</TableHead>
+                          <TableHead className="text-right">Total Value</TableHead>
+                        </TableRow>
                       </TableHeader>
                       <TableBody>
-                      {orders.map((order) => (
-                          <TableRow key={order.id}>
-                          <TableCell className="font-medium">{order.token}</TableCell>
-                          <TableCell>{format(new Date(order.orderDate), 'MMM dd, yyyy HH:mm')}</TableCell>
-                          <TableCell>{order.customerName || 'N/A'}{order.customerMobile && ` (${order.customerMobile})`}</TableCell>
-                          <TableCell className="text-right">{order.items.reduce((sum, item) => sum + item.quantity, 0)}</TableCell>
-                          <TableCell className="text-right">${order.subtotal.toFixed(2)}</TableCell>
-                          <TableCell className="text-right text-red-500">${order.discountAmount.toFixed(2)}</TableCell>
-                          <TableCell className="text-right font-semibold text-accent">${order.total.toFixed(2)}</TableCell>
+                        {Object.entries(itemSalesReport)
+                          .sort(([, a], [, b]) => b.quantity - a.quantity) 
+                          .map(([itemName, data]) => (
+                          <TableRow key={itemName}>
+                            <TableCell className="font-medium">{itemName}</TableCell>
+                            <TableCell className="text-right">{data.quantity}</TableCell>
+                            <TableCell className="text-right">${data.totalValue.toFixed(2)}</TableCell>
                           </TableRow>
-                      ))}
+                        ))}
                       </TableBody>
-                  </Table>
+                    </Table>
                   </ScrollArea>
-              </CardContent>
-          </Card>
-        </>
-      )}
+                </CardContent>
+              </Card>
+            )}
+        
+            <Card className="shadow-md">
+                <CardHeader>
+                    <CardTitle>Order Details</CardTitle>
+                    <CardDescription>
+                        {isCustomerSearchActive
+                            ? `Showing orders for ${lastSearchCriteria.name || lastSearchCriteria.mobile || 'selected customer'}${dateRange?.from || dateRange?.to ? ' within the selected date range' : ' (all dates)'}.`
+                            : `All orders ${dateRange?.from || dateRange?.to ? 'within the selected date range' : 'for all dates'}.`
+                        }
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <ScrollArea className="h-[500px] w-full border rounded-md">
+                    <Table>
+                        <TableHeader className="sticky top-0 bg-muted z-10">
+                        <TableRow>
+                            <TableHead className="w-[150px]">Order ID (Token)</TableHead>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Customer</TableHead>
+                            <TableHead className="text-right">Items</TableHead>
+                            <TableHead className="text-right">Subtotal</TableHead>
+                            <TableHead className="text-right">Discount</TableHead>
+                            <TableHead className="text-right">Total</TableHead>
+                        </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                        {orders.map((order) => (
+                            <TableRow key={order.id}>
+                            <TableCell className="font-medium">{order.token}</TableCell>
+                            <TableCell>{format(new Date(order.orderDate), 'MMM dd, yyyy HH:mm')}</TableCell>
+                            <TableCell>{order.customerName || 'N/A'}{order.customerMobile && ` (${order.customerMobile})`}</TableCell>
+                            <TableCell className="text-right">{order.items.reduce((sum, item) => sum + item.quantity, 0)}</TableCell>
+                            <TableCell className="text-right">${order.subtotal.toFixed(2)}</TableCell>
+                            <TableCell className="text-right text-red-500">${order.discountAmount.toFixed(2)}</TableCell>
+                            <TableCell className="text-right font-semibold text-accent">${order.total.toFixed(2)}</TableCell>
+                            </TableRow>
+                        ))}
+                        </TableBody>
+                    </Table>
+                    </ScrollArea>
+                </CardContent>
+            </Card>
+          </>
+        )}
+      </div>
     </div>
   );
 }

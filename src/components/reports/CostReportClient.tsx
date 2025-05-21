@@ -3,9 +3,11 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { format, subDays } from 'date-fns';
-import { Calendar as CalendarIcon, Search, Loader2, BarChartHorizontalBig, TrendingUp, Filter, Package, Tag, List } from 'lucide-react';
-import type { CostEntry, CostCategory, PurchaseItem } from '@/types';
+import { Calendar as CalendarIcon, Search, Loader2, BarChartHorizontalBig, TrendingUp, Filter, Package, Tag, List, Printer } from 'lucide-react';
+import type { CostEntry, CostCategory, PurchaseItem, RestaurantProfile } from '@/types';
 import { fetchCostEntriesAction, fetchCostCategoriesAction, fetchPurchaseItemsAction } from '@/app/actions/costActions';
+import { fetchRestaurantProfileAction } from '@/app/actions/restaurantProfileActions';
+import ReportPrintHeader from '@/components/reports/ReportPrintHeader';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -33,7 +35,7 @@ export default function CostReportClient() {
   });
   const [costEntries, setCostEntries] = useState<CostEntry[]>([]);
   const [aggregatedCosts, setAggregatedCosts] = useState<AggregatedCost[]>([]);
-  const [isLoading, setIsLoading] = useState(true); // Start with true for initial load
+  const [isLoading, setIsLoading] = useState(true); 
   const [error, setError] = useState<string | null>(null);
 
   const [costCategories, setCostCategories] = useState<CostCategory[]>([]);
@@ -41,6 +43,25 @@ export default function CostReportClient() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(ALL_CATEGORIES_VALUE);
   const [selectedPurchaseItemId, setSelectedPurchaseItemId] = useState<string>(ALL_ITEMS_VALUE);
   const [isLoadingFilters, setIsLoadingFilters] = useState(true);
+  const [restaurantProfile, setRestaurantProfile] = useState<RestaurantProfile | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+
+  const loadProfile = useCallback(async () => {
+    setIsLoadingProfile(true);
+    try {
+      const profile = await fetchRestaurantProfileAction();
+      setRestaurantProfile(profile);
+    } catch (e) {
+      toast({title: "Error Loading Profile", description: (e as Error).message, variant: "destructive"});
+    } finally {
+      setIsLoadingProfile(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
+
 
   const filteredPurchaseItems = useMemo(() => {
     if (selectedCategoryId === ALL_CATEGORIES_VALUE) {
@@ -87,15 +108,15 @@ export default function CostReportClient() {
     currentCategoryId: string,
     currentPurchaseItemId: string
   ) => {
-    const categoryIdToFetch = currentCategoryId === ALL_CATEGORIES_VALUE ? "" : currentCategoryId;
-    const purchaseItemIdToFetch = currentPurchaseItemId === ALL_ITEMS_VALUE ? "" : currentPurchaseItemId;
+    const categoryIdToFetch = currentCategoryId === ALL_CATEGORIES_VALUE ? undefined : currentCategoryId;
+    const purchaseItemIdToFetch = currentPurchaseItemId === ALL_ITEMS_VALUE ? undefined : currentPurchaseItemId;
     
     if (!currentDateRange.from) {
         toast({ title: "Date Required", description: "Please select a start date for the report.", variant: "destructive"});
         setCostEntries([]);
         setAggregatedCosts([]);
         setError("Start date is required.");
-        setIsLoading(false); // Ensure loading stops if guard fails
+        setIsLoading(false); 
         return;
     }
     setIsLoading(true);
@@ -107,8 +128,8 @@ export default function CostReportClient() {
       const fetchedEntries = await fetchCostEntriesAction(
         currentDateRange.from ? format(currentDateRange.from, 'yyyy-MM-dd') : undefined,
         currentDateRange.to ? format(currentDateRange.to, 'yyyy-MM-dd') : undefined,
-        categoryIdToFetch || undefined,
-        purchaseItemIdToFetch || undefined
+        categoryIdToFetch,
+        purchaseItemIdToFetch
       );
       const sortedEntries = fetchedEntries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       setCostEntries(sortedEntries);
@@ -134,21 +155,17 @@ export default function CostReportClient() {
   }, [loadInitialFiltersData]);
   
   useEffect(() => {
-    if (!isLoadingFilters && dateRange.from) {
+    if (!isLoadingFilters && !isLoadingProfile && dateRange.from) {
       fetchCosts(dateRange, selectedCategoryId, selectedPurchaseItemId);
-    } else if (!dateRange.from) {
-      setIsLoading(false); // Not loading if no date
+    } else if (!dateRange.from && !isLoadingFilters && !isLoadingProfile) {
+      setIsLoading(false); 
       setCostEntries([]);
       setAggregatedCosts([]);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoadingFilters, dateRange, selectedCategoryId, selectedPurchaseItemId, fetchCosts]); // fetchCosts is stable
+  }, [isLoadingFilters, isLoadingProfile, dateRange, selectedCategoryId, selectedPurchaseItemId, fetchCosts]);
 
   const handleSearch = () => {
-    // fetchCosts is called by useEffect when dependencies change
-    // This explicit search button can be kept if desired for manual refresh
-    // or removed if useEffect-driven updates are sufficient.
-    // For now, we'll rely on useEffect. If manual is desired, call:
     if (dateRange.from) {
         fetchCosts(dateRange, selectedCategoryId, selectedPurchaseItemId);
     } else {
@@ -159,19 +176,22 @@ export default function CostReportClient() {
   const totalOverallCost = aggregatedCosts.reduce((sum, cat) => sum + cat.totalAmount, 0);
   const totalDetailedEntriesCost = costEntries.reduce((sum, entry) => sum + entry.amount, 0);
 
+  const handlePrint = () => {
+    window.print();
+  };
 
-  if (isLoadingFilters) {
+  if (isLoadingFilters || isLoadingProfile) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="ml-4 text-lg">Loading filters...</p>
+        <p className="ml-4 text-lg">Loading report prerequisites...</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <Card className="shadow-md">
+      <Card className="shadow-md no-print">
         <CardHeader>
           <CardTitle className="flex items-center">
             <Filter className="mr-2 h-5 w-5 text-accent" />
@@ -215,7 +235,7 @@ export default function CostReportClient() {
                     mode="range"
                     defaultMonth={dateRange.from}
                     selected={dateRange}
-                    onSelect={(newRange) => setDateRange(newRange || {})}
+                    onSelect={(newRange) => setDateRange(newRange || {from: undefined, to: undefined})}
                     numberOfMonths={2}
                   />
                 </PopoverContent>
@@ -229,7 +249,7 @@ export default function CostReportClient() {
               <Select
                 value={selectedCategoryId} 
                 onValueChange={(value) => {
-                  setSelectedCategoryId(value);
+                  setSelectedCategoryId(value === ALL_CATEGORIES_VALUE ? ALL_CATEGORIES_VALUE : value);
                   setSelectedPurchaseItemId(ALL_ITEMS_VALUE); 
                 }}
                 disabled={isLoading || costCategories.length === 0}
@@ -253,7 +273,7 @@ export default function CostReportClient() {
               <Select
                 value={selectedPurchaseItemId} 
                 onValueChange={(value) => {
-                  setSelectedPurchaseItemId(value);
+                  setSelectedPurchaseItemId(value === ALL_ITEMS_VALUE ? ALL_ITEMS_VALUE : value);
                 }}
                 disabled={isLoading || filteredPurchaseItems.length === 0}
               >
@@ -273,121 +293,130 @@ export default function CostReportClient() {
               </Select>
             </div>
             
-            <Button onClick={handleSearch} disabled={isLoading || !dateRange.from} className="w-full lg:w-auto bg-accent hover:bg-accent/90 self-end">
-              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
-              Search Costs
-            </Button>
+            <div className="flex space-x-2 self-end w-full lg:w-auto">
+                <Button onClick={handleSearch} disabled={isLoading || !dateRange.from} className="flex-grow lg:flex-none bg-accent hover:bg-accent/90">
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
+                Search Costs
+                </Button>
+                <Button onClick={handlePrint} disabled={isLoading || (costEntries.length === 0 && aggregatedCosts.length === 0)} variant="outline" className="flex-grow lg:flex-none">
+                    <Printer className="mr-2 h-4 w-4" /> Print
+                </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
 
       {error && (
-        <Alert variant="destructive">
+        <Alert variant="destructive" className="no-print">
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
 
-      {isLoading && (
-         <div className="flex items-center justify-center h-40">
-          <Loader2 className="h-12 w-12 animate-spin text-primary" />
-          <p className="ml-4 text-lg">Loading cost data...</p>
-        </div>
-      )}
+      <div className="printable-area">
+        <ReportPrintHeader profile={restaurantProfile} reportTitle="Cost Report" />
 
-      {!isLoading && !error && aggregatedCosts.length === 0 && costEntries.length === 0 && (
-        <Card className="shadow-md">
-          <CardContent className="text-center py-10 text-muted-foreground">
-            <Search className="mx-auto h-12 w-12 mb-2" />
-            <p>No cost entries found for the selected criteria.</p>
-          </CardContent>
-        </Card>
-      )}
+        {isLoading && (
+          <div className="flex items-center justify-center h-40">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            <p className="ml-4 text-lg">Loading cost data...</p>
+          </div>
+        )}
 
-      {!isLoading && aggregatedCosts.length > 0 && (
-        <Card className="shadow-md">
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <BarChartHorizontalBig className="mr-2 h-6 w-6 text-accent" />
-              Category-wise Cost Summary
-            </CardTitle>
-            <CardDescription>Total expenses grouped by category for the selected criteria.</CardDescription>
-          </CardHeader>
-          <CardContent>
-                <ScrollArea className="h-auto max-h-[250px] w-full border rounded-md mb-4">
-                  <Table>
-                    <TableHeader className="sticky top-0 bg-muted z-10">
-                      <TableRow>
-                        <TableHead>Category Name</TableHead>
-                        <TableHead className="text-right">Number of Entries</TableHead>
-                        <TableHead className="text-right">Total Amount</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {aggregatedCosts.map((agg) => (
-                        <TableRow key={agg.categoryName}>
-                          <TableCell className="font-medium">{agg.categoryName}</TableCell>
-                          <TableCell className="text-right">{agg.entryCount}</TableCell>
-                          <TableCell className="text-right font-semibold text-destructive">${agg.totalAmount.toFixed(2)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </ScrollArea>
-                <div className="text-right mt-4">
-                  <p className="text-lg font-bold">Overall Total (Summary): <span className="text-destructive">${totalOverallCost.toFixed(2)}</span></p>
-                </div>
-          </CardContent>
-        </Card>
-      )}
+        {!isLoading && !error && aggregatedCosts.length === 0 && costEntries.length === 0 && (
+          <Card className="shadow-md">
+            <CardContent className="text-center py-10 text-muted-foreground">
+              <Search className="mx-auto h-12 w-12 mb-2" />
+              <p>No cost entries found for the selected criteria.</p>
+            </CardContent>
+          </Card>
+        )}
 
-
-      {!isLoading && costEntries.length > 0 && (
-        <Card className="shadow-md">
+        {!isLoading && aggregatedCosts.length > 0 && (
+          <Card className="shadow-md">
             <CardHeader>
-                <CardTitle className="flex items-center">
-                    <List className="mr-2 h-6 w-6 text-accent" />
-                    Detailed Cost Entries
-                </CardTitle>
-                <CardDescription>Individual cost entries for the selected criteria, sorted by date.</CardDescription>
+              <CardTitle className="flex items-center">
+                <BarChartHorizontalBig className="mr-2 h-6 w-6 text-accent no-print" />
+                Category-wise Cost Summary
+              </CardTitle>
+              <CardDescription>Total expenses grouped by category for the selected criteria.</CardDescription>
             </CardHeader>
             <CardContent>
-                 <ScrollArea className="h-[400px] w-full border rounded-md">
+                  <ScrollArea className="h-auto max-h-[250px] w-full border rounded-md mb-4">
                     <Table>
-                        <TableHeader className="sticky top-0 bg-muted z-10">
-                            <TableRow>
-                                <TableHead>Date</TableHead>
-                                <TableHead>Category</TableHead>
-                                <TableHead>Purchase Item</TableHead>
-                                <TableHead className="text-right">Amount</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {costEntries.map((entry) => (
-                                <TableRow key={entry.id}>
-                                    <TableCell>{format(new Date(entry.date), "MMM dd, yyyy")}</TableCell>
-                                    <TableCell>{entry.categoryName}</TableCell>
-                                    <TableCell className="font-medium">
-                                      {entry.purchaseItemCode ? `[${entry.purchaseItemCode}] ` : ''}
-                                      {entry.purchaseItemName}
-                                    </TableCell>
-                                    <TableCell className="text-right text-destructive">${entry.amount.toFixed(2)}</TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
+                      <TableHeader className="sticky top-0 bg-muted z-10">
+                        <TableRow>
+                          <TableHead>Category Name</TableHead>
+                          <TableHead className="text-right">Number of Entries</TableHead>
+                          <TableHead className="text-right">Total Amount</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {aggregatedCosts.map((agg) => (
+                          <TableRow key={agg.categoryName}>
+                            <TableCell className="font-medium">{agg.categoryName}</TableCell>
+                            <TableCell className="text-right">{agg.entryCount}</TableCell>
+                            <TableCell className="text-right font-semibold text-destructive">${agg.totalAmount.toFixed(2)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
                     </Table>
-                </ScrollArea>
-                <div className="text-right mt-4">
-                  <p className="text-lg font-bold">Overall Total (Detailed Entries): <span className="text-destructive">${totalDetailedEntriesCost.toFixed(2)}</span></p>
-                </div>
+                  </ScrollArea>
+                  <div className="text-right mt-4">
+                    <p className="text-lg font-bold">Overall Total (Summary): <span className="text-destructive">${totalOverallCost.toFixed(2)}</span></p>
+                  </div>
             </CardContent>
-             <CardFooter>
-                <p className="text-xs text-muted-foreground italic">
-                This table shows all individual cost entries matching your filters. The summary above aggregates these by category.
-                </p>
-            </CardFooter>
-        </Card>
-      )}
+          </Card>
+        )}
+
+
+        {!isLoading && costEntries.length > 0 && (
+          <Card className="shadow-md mt-6">
+              <CardHeader>
+                  <CardTitle className="flex items-center">
+                      <List className="mr-2 h-6 w-6 text-accent no-print" />
+                      Detailed Cost Entries
+                  </CardTitle>
+                  <CardDescription>Individual cost entries for the selected criteria, sorted by date.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                  <ScrollArea className="h-[400px] w-full border rounded-md">
+                      <Table>
+                          <TableHeader className="sticky top-0 bg-muted z-10">
+                              <TableRow>
+                                  <TableHead>Date</TableHead>
+                                  <TableHead>Category</TableHead>
+                                  <TableHead>Purchase Item</TableHead>
+                                  <TableHead className="text-right">Amount</TableHead>
+                              </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                              {costEntries.map((entry) => (
+                                  <TableRow key={entry.id}>
+                                      <TableCell>{format(new Date(entry.date), "MMM dd, yyyy")}</TableCell>
+                                      <TableCell>{entry.categoryName}</TableCell>
+                                      <TableCell className="font-medium">
+                                        {entry.purchaseItemCode ? `[${entry.purchaseItemCode}] ` : ''}
+                                        {entry.purchaseItemName}
+                                      </TableCell>
+                                      <TableCell className="text-right text-destructive">${entry.amount.toFixed(2)}</TableCell>
+                                  </TableRow>
+                              ))}
+                          </TableBody>
+                      </Table>
+                  </ScrollArea>
+                  <div className="text-right mt-4">
+                    <p className="text-lg font-bold">Overall Total (Detailed Entries): <span className="text-destructive">${totalDetailedEntriesCost.toFixed(2)}</span></p>
+                  </div>
+              </CardContent>
+              <CardFooter className="no-print">
+                  <p className="text-xs text-muted-foreground italic">
+                  This table shows all individual cost entries matching your filters. The summary above aggregates these by category.
+                  </p>
+              </CardFooter>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }
