@@ -36,17 +36,20 @@ export default function MenuItemCard({ item }: MenuItemCardProps) {
             data-ai-hint={item.dataAiHint}
             sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, (max-width: 1280px) 16vw, (max-width: 1536px) 12.5vw, 10vw"
             className="pointer-events-none" // Prevents image from capturing click if not needed
+            onError={(e) => (e.currentTarget.src = `https://placehold.co/300x200.png?text=${encodeURIComponent(item.name || 'Item')}`)}
           />
         </div>
       </CardHeader>
-      <CardContent className="p-2 flex-grow flex flex-col justify-between"> {/* Reduced padding */}
+      <CardContent className="p-2 flex-grow flex flex-col"> {/* Reduced padding, removed justify-between */}
         <CardTitle 
-            className="text-xs font-medium leading-tight h-8 overflow-hidden text-ellipsis" // Adjusted for ~2 lines
+            className="text-xs font-medium leading-tight h-7 overflow-hidden text-ellipsis mb-px" // Reduced height, added small bottom margin
             title={item.name} // Full name on hover
         > 
           {item.name}
         </CardTitle>
-        <p className="text-xs text-foreground/80 font-semibold mt-0.5">${item.price.toFixed(2)}</p>
+        <p className="text-xs text-foreground/80 font-semibold"> {/* Removed top margin */}
+          ${item.price.toFixed(2)}
+        </p>
       </CardContent>
     </Card>
   );
