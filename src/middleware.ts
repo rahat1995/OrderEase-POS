@@ -1,61 +1,53 @@
+import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
+import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getStorage, type FirebaseStorage } from "firebase/storage";
+// Removed: import { getAuth, type Auth } from "firebase/auth"; 
 
-import { type NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+};
 
-// This is a basic middleware for route protection.
-// It checks for the presence of a Firebase Auth session cookie.
-// More advanced role-based protection in middleware often requires custom claims in the ID token.
+// CRITICAL CHECK FOR API KEY
+const apiKey = firebaseConfig.apiKey;
+const isApiKeyMissingOrPlaceholder = !apiKey || apiKey.startsWith("your_") || apiKey.startsWith("AIzaSyYOUR_") || apiKey.length < 10;
 
-const ADMIN_PREFIX = '/admin';
-const LOGIN_PATH = '/login';
-
-export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  const cookieStore = cookies();
-
-  // Attempt to find a cookie that Firebase Auth typically sets.
-  // The exact name can vary or you might use a custom session cookie strategy.
-  // Common Firebase Auth cookies might start with 'firebase' or be named '__session'.
-  // For simplicity, we'll check for any cookie indicating a session.
-  // A more robust check would involve verifying the ID token if using custom cookie strategy.
-  const sessionCookie = cookieStore.getAll().find(cookie => 
-    cookie.name.includes('firebase') || cookie.name.includes('session')
-  );
-  // Note: The default Firebase JS SDK uses IndexedDB for session persistence, not directly cookies accessible by middleware for token verification
-  // without custom setup (e.g., server-side session cookies). This check is a basic heuristic.
-  // A truly secure middleware would verify a JWT (e.g., Firebase ID token passed as a cookie).
-  // For this iteration, we rely on client-side checks in AdminLayout for role-based access after Firebase JS SDK initializes.
-
-  // If trying to access an admin route
-  if (pathname.startsWith(ADMIN_PREFIX)) {
-    if (!sessionCookie) { // A very basic check, not truly secure for role access
-      // If no session cookie, redirect to login, preserving the intended path
-      const url = request.nextUrl.clone();
-      url.pathname = LOGIN_PATH;
-      url.searchParams.set('next', pathname); // Pass original path to redirect back after login
-      return NextResponse.redirect(url);
-    }
-    // If session cookie exists, allow access. Role check will be client-side in AdminLayout.
-  }
-
-  // If accessing login page while a session cookie exists, redirect to home
-  // This might be too aggressive if the session isn't fully validated yet.
-  // if (pathname === LOGIN_PATH && sessionCookie) {
-  //   return NextResponse.redirect(new URL('/', request.url));
-  // }
-
-  return NextResponse.next();
+if (isApiKeyMissingOrPlaceholder) {
+  const errorMessage = [
+    "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
+    "CRITICAL FIREBASE CONFIGURATION ERROR:",
+    "Firebase API Key (NEXT_PUBLIC_FIREBASE_API_KEY) is MISSING, a PLACEHOLDER, or INVALID.",
+    "Your application WILL NOT be able to connect to Firebase services.",
+    "Ensure this key is correctly set in your '.env.local' file and that you RESTART your dev server after changes.",
+    "------------------------------------------------------------------------------------",
+    "TROUBLESHOOTING STEPS:",
+    "1. Ensure you have a '.env.local' file in the ROOT of your project directory.",
+    "2. In '.env.local', make sure NEXT_PUBLIC_FIREBASE_API_KEY is set to your ACTUAL API key.",
+    "   Example: NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+    "3. Find your API key in: Firebase Console -> Project settings (gear icon ⚙️) -> General tab -> Your apps -> SDK setup and configuration.",
+    "4. After editing and SAVING '.env.local', you MUST RESTART your Next.js development server (stop 'npm run dev' and run it again).",
+    "------------------------------------------------------------------------------------",
+    `Current value loaded for NEXT_PUBLIC_FIREBASE_API_KEY (length: ${apiKey?.length}): '${apiKey?.substring(0, 5)}...'`,
+    "If this value is 'undefined', a placeholder, or not your actual key, Firebase will fail.",
+    "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+  ].join("\n");
+  console.error("\n\n" + errorMessage + "\n\n");
 }
 
-export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
-  ],
-};
+
+let app: FirebaseApp;
+if (getApps().length === 0) {
+  app = initializeApp(firebaseConfig);
+} else {
+  app = getApp();
+}
+
+const db: Firestore = getFirestore(app);
+const storage: FirebaseStorage = getStorage(app);
+// Removed: const auth: Auth = getAuth(app); 
+
+export { app, db, storage }; // Removed auth from export

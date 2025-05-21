@@ -10,9 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Trash2, PlusCircle, MinusCircle, Printer, User, Phone, ShoppingCart, Loader2, Ticket, XCircle, Percent, DollarSign, Eraser } from 'lucide-react';
-import type { CartItem, Order, Voucher, RestaurantProfile, PrintRequestData, AppUser } from '@/types'; 
+import type { CartItem, Order, Voucher, RestaurantProfile, PrintRequestData } from '@/types'; 
 import { toast } from '@/hooks/use-toast';
-import { useAuth } from '@/contexts/AuthContext'; // Import useAuth
+// Removed: useAuth import
 
 interface OrderCartProps {
   onPrintRequest: (data: PrintRequestData) => void;
@@ -40,9 +40,8 @@ export default function OrderCart({ onPrintRequest, restaurantProfile }: OrderCa
     getDiscountAmount,
     getTotal,
     finalizeOrder,
-    // clearOrder, // clearOrder is called by PosClientPage
   } = useOrder();
-  const { currentUser } = useAuth(); // Get current user from AuthContext
+  // Removed: currentUser from useAuth()
 
   const [currentVoucherCode, setCurrentVoucherCode] = useState('');
   const [currentCustomerName, setCurrentCustomerName] = useState(customerName);
@@ -103,15 +102,11 @@ export default function OrderCart({ onPrintRequest, restaurantProfile }: OrderCa
   };
   
   const handleSaveAndPrint = async () => {
-    if (!currentUser) {
-      toast({title: "Login Required", description: "Please login to finalize the order.", variant: "destructive"});
-      // Optionally redirect to login: router.push('/login?next=' + window.location.pathname);
-      return;
-    }
+    // Removed: currentUser check
     setIsProcessingOrder(true);
     setCustomerInfo(currentCustomerName, currentCustomerMobile); 
     
-    const order = await finalizeOrder(currentUser); // Pass current user
+    const order = await finalizeOrder(); // Removed currentUser from finalizeOrder call
     
     onPrintRequest({ order, profile: restaurantProfile }); 
     setIsProcessingOrder(false);
@@ -275,11 +270,9 @@ export default function OrderCart({ onPrintRequest, restaurantProfile }: OrderCa
         </div>
         
         <div className="w-full flex space-x-2 mt-1">
-           {/* clearOrder button might be better handled by parent after successful print/save */}
-           {/* <Button onClick={clearOrder} variant="outline" className="w-full h-9 text-sm" disabled={isProcessing}>Clear Cart</Button> */}
-           <Button onClick={handleSaveAndPrint} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground h-9 text-sm" disabled={items.length === 0 || isProcessing || !currentUser}>
+           <Button onClick={handleSaveAndPrint} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground h-9 text-sm" disabled={items.length === 0 || isProcessing}>
              {isProcessingOrder ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Printer className="mr-2 h-4 w-4" />}
-             {isProcessingOrder ? 'Processing...' : (currentUser ? 'Save & Print' : 'Login to Save')}
+             {isProcessingOrder ? 'Processing...' : 'Save & Print'}
            </Button>
         </div>
       </CardFooter>

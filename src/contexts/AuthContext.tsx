@@ -1,143 +1,53 @@
+import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
+import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getStorage, type FirebaseStorage } from "firebase/storage";
+// Removed: import { getAuth, type Auth } from "firebase/auth"; 
 
-"use client";
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+};
 
-import type { ReactNode} from 'react';
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { type User as FirebaseAuthUser, onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
-import type { AppUser, UserRole } from '@/types';
-import { ensureUserProfileClient, getUserProfileClient } from '@/app/actions/authActions'; // Client-side wrappers
-import { usePathname, useRouter } from 'next/navigation';
-import { toast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+// CRITICAL CHECK FOR API KEY
+const apiKey = firebaseConfig.apiKey;
+const isApiKeyMissingOrPlaceholder = !apiKey || apiKey.startsWith("your_") || apiKey.startsWith("AIzaSyYOUR_") || apiKey.length < 10;
 
-interface AuthContextType {
-  currentUser: AppUser | null; // Our custom AppUser type
-  firebaseUser: FirebaseAuthUser | null; // Raw Firebase user
-  isLoading: boolean;
-  isAdmin: boolean;
-  login: (email: string, pass: string) => Promise<boolean>;
-  logout: () => Promise<void>;
-  refreshUserProfile: () => Promise<void>;
+if (isApiKeyMissingOrPlaceholder) {
+  const errorMessage = [
+    "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
+    "CRITICAL FIREBASE CONFIGURATION ERROR:",
+    "Firebase API Key (NEXT_PUBLIC_FIREBASE_API_KEY) is MISSING, a PLACEHOLDER, or INVALID.",
+    "Your application WILL NOT be able to connect to Firebase services.",
+    "Ensure this key is correctly set in your '.env.local' file and that you RESTART your dev server after changes.",
+    "------------------------------------------------------------------------------------",
+    "TROUBLESHOOTING STEPS:",
+    "1. Ensure you have a '.env.local' file in the ROOT of your project directory.",
+    "2. In '.env.local', make sure NEXT_PUBLIC_FIREBASE_API_KEY is set to your ACTUAL API key.",
+    "   Example: NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+    "3. Find your API key in: Firebase Console -> Project settings (gear icon ⚙️) -> General tab -> Your apps -> SDK setup and configuration.",
+    "4. After editing and SAVING '.env.local', you MUST RESTART your Next.js development server (stop 'npm run dev' and run it again).",
+    "------------------------------------------------------------------------------------",
+    `Current value loaded for NEXT_PUBLIC_FIREBASE_API_KEY (length: ${apiKey?.length}): '${apiKey?.substring(0, 5)}...'`,
+    "If this value is 'undefined', a placeholder, or not your actual key, Firebase will fail.",
+    "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+  ].join("\n");
+  console.error("\n\n" + errorMessage + "\n\n");
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
-  const [firebaseUser, setFirebaseUser] = useState<FirebaseAuthUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const router = useRouter();
-  const pathname = usePathname();
+let app: FirebaseApp;
+if (getApps().length === 0) {
+  app = initializeApp(firebaseConfig);
+} else {
+  app = getApp();
+}
 
-  const fetchUserProfile = useCallback(async (user: FirebaseAuthUser) => {
-    if (user) {
-      try {
-        // Ensure profile exists, then fetch it
-        await ensureUserProfileClient(user.uid, user.email || '', user.displayName || undefined);
-        const profile = await getUserProfileClient(user.uid);
-        if (profile) {
-          setCurrentUser(profile);
-        } else {
-          // This case should ideally not happen if ensureUserProfile works
-          console.warn("AuthContext: User profile not found in Firestore after ensuring it exists for UID:", user.uid);
-          setCurrentUser(null); // Or handle as an error state
-        }
-      } catch (error) {
-        console.error("AuthContext: Error fetching user profile:", error);
-        setCurrentUser(null);
-        // Potentially sign out the user if profile fetch fails critically
-        // await firebaseSignOut(auth); 
-      }
-    } else {
-      setCurrentUser(null);
-    }
-  }, []);
+const db: Firestore = getFirestore(app);
+const storage: FirebaseStorage = getStorage(app);
+// Removed: const auth: Auth = getAuth(app); 
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setIsLoading(true);
-      setFirebaseUser(user);
-      if (user) {
-        await fetchUserProfile(user);
-      } else {
-        setCurrentUser(null);
-      }
-      setIsLoading(false);
-    });
-    return () => unsubscribe();
-  }, [fetchUserProfile]);
-
-  const login = async (email: string, pass: string): Promise<boolean> => {
-    setIsLoading(true);
-    try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, pass);
-      // onAuthStateChanged will trigger fetchUserProfile
-      toast({ title: "Login Successful", description: `Welcome back!` });
-      return true;
-    } catch (error: any) {
-      console.error("AuthContext: Login error", error);
-      let message = "Login failed. Please check your credentials.";
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-        message = "Invalid email or password.";
-      } else if (error.code === 'auth/too-many-requests') {
-        message = "Too many login attempts. Please try again later.";
-      }
-      toast({ title: "Login Failed", description: message, variant: "destructive" });
-      setIsLoading(false);
-      return false;
-    }
-    // setIsLoading(false) will be handled by onAuthStateChanged
-  };
-
-  const logout = async () => {
-    setIsLoading(true);
-    try {
-      await firebaseSignOut(auth);
-      setCurrentUser(null);
-      setFirebaseUser(null);
-      // Clear any sensitive local storage or context state if needed
-      router.push('/login'); // Redirect to login after logout
-      toast({ title: "Logged Out", description: "You have been successfully logged out." });
-    } catch (error) {
-      console.error("AuthContext: Logout error", error);
-      toast({ title: "Logout Failed", description: "Could not log out. Please try again.", variant: "destructive" });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  const refreshUserProfile = useCallback(async () => {
-      if (firebaseUser) {
-          setIsLoading(true);
-          await fetchUserProfile(firebaseUser);
-          setIsLoading(false);
-      }
-  }, [firebaseUser, fetchUserProfile]);
-
-
-  const isAdmin = currentUser?.role === 'admin';
-
-  if (isLoading && !pathname.startsWith('/login')) { // Don't show global loader on login page itself during initial auth check
-    return (
-      <div className="flex items-center justify-center h-screen w-screen bg-background">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="ml-4 text-lg text-foreground">Loading user session...</p>
-      </div>
-    );
-  }
-
-  return (
-    <AuthContext.Provider value={{ currentUser, firebaseUser, isLoading, login, logout, isAdmin, refreshUserProfile }}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
-
-export const useAuth = (): AuthContextType => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
+export { app, db, storage }; // Removed auth from export

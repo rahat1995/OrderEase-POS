@@ -3,11 +3,10 @@
 
 import type { ReactNode } from 'react';
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import type { MenuItem, CartItem, Order, Voucher, AppUser } from '@/types'; // Added AppUser
+import type { MenuItem, CartItem, Order, Voucher } from '@/types'; 
 import { toast } from "@/hooks/use-toast";
 import { saveOrderAction } from '@/app/actions/orderActions';
 import { validateVoucherAction } from '@/app/actions/voucherActions'; 
-// import { useAuth } from './AuthContext'; // Import useAuth if needed for createdBy
 
 interface OrderState {
   items: CartItem[];
@@ -33,14 +32,13 @@ interface OrderContextType extends OrderState {
   removeVoucher: () => void;
   applyManualDiscount: (type: 'percentage' | 'fixed', value: number) => void;
   removeManualDiscount: () => void;
-  finalizeOrder: (currentUser?: AppUser | null) => Promise<Order | null>; // Pass current user
+  finalizeOrder: () => Promise<Order | null>; // Removed currentUser parameter
   clearOrder: () => void;
 }
 
 const OrderContext = createContext<OrderContextType | undefined>(undefined);
 
 export const OrderProvider = ({ children }: { children: ReactNode }) => {
-  // const { currentUser } = useAuth(); // Get current user from AuthContext if needed here
   const [items, setItems] = useState<CartItem[]>([]);
   const [customerName, setCustomerName] = useState<string>('');
   const [customerMobile, setCustomerMobile] = useState<string>('');
@@ -250,7 +248,7 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [removeManualDiscount]);
 
-  const finalizeOrder = useCallback(async (currentUser?: AppUser | null): Promise<Order | null> => {
+  const finalizeOrder = useCallback(async (): Promise<Order | null> => { // Removed currentUser parameter
     if (items.length === 0) {
       toast({ title: "Cannot Finalize", description: "Cart is empty.", variant: "destructive" });
       return null;
@@ -276,8 +274,7 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
         voucherDiscountDetails: appliedVoucher ? { type: appliedVoucher.discountType, value: appliedVoucher.discountValue } : undefined,
         manualDiscountType: !appliedVoucher && manualDiscountValue > 0 ? manualDiscountType : undefined,
         manualDiscountValue: !appliedVoucher && manualDiscountValue > 0 ? manualDiscountValue : undefined,
-        createdByUid: currentUser?.uid,
-        createdByName: currentUser?.displayName || currentUser?.email,
+        // Removed: createdByUid and createdByName
       };
     
       toast({ title: "Saving Order...", description: `Token: ${token}. Please wait.`});

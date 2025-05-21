@@ -48,9 +48,8 @@ export interface Order {
   };
   manualDiscountType?: 'percentage' | 'fixed';
   manualDiscountValue?: number;
-  // User who created the order - for future tracking
-  createdByUid?: string;
-  createdByName?: string; 
+  // Removed: createdByUid?: string;
+  // Removed: createdByName?: string; 
 }
 
 // Costing Module Types
@@ -170,21 +169,3 @@ export interface PrintRequestData {
   order: Order | null;
   profile: RestaurantProfile | null;
 }
-
-// User and Auth Types
-export type UserRole = 'admin' | 'cashier' | 'viewer'; // Add more roles as needed
-
-export interface AppUser {
-  uid: string; // Firebase Auth UID
-  email: string;
-  displayName?: string; // "Employee Name"
-  mobile?: string;
-  designation?: string;
-  role: UserRole;
-  createdAt: string; // ISO string
-  updatedAt?: string; // ISO string
-}
-
-export type CreateAppUserInput = Omit<AppUser, 'uid' | 'createdAt' | 'updatedAt'> & { uid: string };
-export type UpdateAppUserInput = Partial<Omit<AppUser, 'uid' | 'createdAt' | 'email'>>;
-

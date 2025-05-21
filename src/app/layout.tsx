@@ -2,7 +2,7 @@
 "use client"; 
 
 import type { Metadata } from 'next'; 
-import { AuthProvider, useAuth } from '@/contexts/AuthContext'; // Import AuthProvider and useAuth
+// Removed: AuthProvider and useAuth imports
 import { Geist } from 'next/font/google';
 import Link from 'next/link';
 import './globals.css';
@@ -18,35 +18,38 @@ import {
   BarChart3,
   TrendingUp,
   PieChart,
-  Users as UsersIcon, // Renamed to avoid conflict with Users page icon
+  Users as UsersIcon, 
   WifiOff,
   RefreshCw,
   Building, 
-  SettingsIcon,
-  LogOut,
-  LogIn,
-  UserCog, // For User Management
+  // SettingsIcon, // Removed as it was mainly for user profile
+  // LogOut, // Removed
+  // LogIn, // Removed
+  // UserCog, // Removed for User Management
 } from 'lucide-react';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { cn } from '@/lib/utils';
 import { clearAllAppCache } from '@/lib/cache'; 
 import { toast } from '@/hooks/use-toast'; 
-import { useRouter } from 'next/navigation';
+// Removed: useRouter import
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
   subsets: ['latin'],
 });
 
-// export const metadata: Metadata = { // Metadata should be defined in server components or page.tsx
-//   title: 'OrderEase POS',
-//   description: 'Point of Sale system for restaurants',
+// export const metadata: Metadata = { // Reverted to simpler head tags if layout is client
+// title: 'OrderEase POS',
+// description: 'Point of Sale system for restaurants',
 // };
 
-function AppContent({ children }: { children: React.ReactNode }) {
+// AppContent is no longer needed as AuthProvider is removed.
+// We will integrate online status directly.
+
+export default function RootLayout({ children }: { children: React.ReactNode; }) {
   const isOnline = useOnlineStatus();
-  const { currentUser, logout, isAdmin, isLoading: isAuthLoading } = useAuth();
-  const router = useRouter();
+  // Removed: currentUser, logout, isAdmin, isAuthLoading from useAuth()
+  // Removed: router from useRouter()
 
   const handleSyncData = () => {
     if (isOnline) {
@@ -67,10 +70,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
     }
   };
   
-  const handleLogout = async () => {
-    await logout();
-    // router.push('/login'); // AuthContext logout already handles redirect
-  };
+  // Removed: handleLogout function
 
   return (
     <html lang="en">
@@ -79,7 +79,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
         <meta name="description" content="Point of Sale system for restaurants" />
       </head>
       <body className={`${geistSans.variable} antialiased bg-secondary/30 text-foreground`}>
-        <OrderProvider> {/* OrderProvider should be inside AuthProvider if it needs auth context */}
+        <OrderProvider>
           {!isOnline && (
             <div className="bg-destructive text-destructive-foreground text-center py-2 px-4 fixed top-0 left-0 right-0 z-[1000] flex items-center justify-center">
               <WifiOff className="h-5 w-5 mr-2" />
@@ -95,107 +95,70 @@ function AppContent({ children }: { children: React.ReactNode }) {
               </Link>
               <div className="space-x-1 flex items-center flex-wrap">
                 {/* Sales Management */}
-                {currentUser && (
-                  <>
-                    <Button asChild variant="ghost" size="sm">
-                      <Link href="/">
-                        <ShoppingCart className="mr-1.5 h-4 w-4" /> POS
-                      </Link>
-                    </Button>
-                    {isAdmin && (
-                       <Button asChild variant="ghost" size="sm">
-                        <Link href="/admin/menu">
-                          <ListPlus className="mr-1.5 h-4 w-4" /> Menu Mgt.
-                        </Link>
-                      </Button>
-                    )}
-                     {isAdmin && (
-                        <Button asChild variant="ghost" size="sm">
-                        <Link href="/admin/vouchers">
-                          <Tag className="mr-1.5 h-4 w-4" /> Voucher Mgt.
-                        </Link>
-                      </Button>
-                     )}
-                  </>
-                )}
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/">
+                    <ShoppingCart className="mr-1.5 h-4 w-4" /> POS
+                  </Link>
+                </Button>
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/admin/menu">
+                    <ListPlus className="mr-1.5 h-4 w-4" /> Menu Mgt.
+                  </Link>
+                </Button>
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/admin/vouchers">
+                    <Tag className="mr-1.5 h-4 w-4" /> Voucher Mgt.
+                  </Link>
+                </Button>
 
                 {/* Purchase/Cost Management */}
-                {currentUser && isAdmin && (
-                  <>
-                    <Button asChild variant="ghost" size="sm">
-                      <Link href="/admin/costing">
-                        <Landmark className="mr-1.5 h-4 w-4" /> Cost Mgt.
-                      </Link>
-                    </Button>
-                    <Button asChild variant="ghost" size="sm">
-                      <Link href="/admin/supplier-payments">
-                        <CreditCard className="mr-1.5 h-4 w-4" /> Supplier Payments
-                      </Link>
-                    </Button>
-                  </>
-                )}
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/admin/costing">
+                    <Landmark className="mr-1.5 h-4 w-4" /> Cost Mgt.
+                  </Link>
+                </Button>
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/admin/supplier-payments">
+                    <CreditCard className="mr-1.5 h-4 w-4" /> Supplier Payments
+                  </Link>
+                </Button>
                 
                 {/* Reports */}
-                {currentUser && isAdmin && (
-                  <>
-                    <Button asChild variant="ghost" size="sm">
-                      <Link href="/reports/sales">
-                        <BarChart3 className="mr-1.5 h-4 w-4" /> Sales Report
-                      </Link>
-                    </Button>
-                    <Button asChild variant="ghost" size="sm">
-                      <Link href="/reports/costing">
-                        <TrendingUp className="mr-1.5 h-4 w-4" /> Cost Report
-                      </Link>
-                    </Button>
-                    <Button asChild variant="ghost" size="sm">
-                      <Link href="/reports/supplier-dues">
-                        <UsersIcon className="mr-1.5 h-4 w-4" /> Supplier Dues
-                      </Link>
-                    </Button>
-                    <Button asChild variant="ghost" size="sm">
-                      <Link href="/reports/profit-loss">
-                        <PieChart className="mr-1.5 h-4 w-4" /> Profit & Loss
-                      </Link>
-                    </Button>
-                  </>
-                )}
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/reports/sales">
+                    <BarChart3 className="mr-1.5 h-4 w-4" /> Sales Report
+                  </Link>
+                </Button>
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/reports/costing">
+                    <TrendingUp className="mr-1.5 h-4 w-4" /> Cost Report
+                  </Link>
+                </Button>
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/reports/supplier-dues">
+                    <UsersIcon className="mr-1.5 h-4 w-4" /> Supplier Dues
+                  </Link>
+                </Button>
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/reports/profit-loss">
+                    <PieChart className="mr-1.5 h-4 w-4" /> Profit & Loss
+                  </Link>
+                </Button>
                 
                 {/* Settings & User Management */}
-                 {currentUser && isAdmin && (
-                  <>
-                    <Button asChild variant="ghost" size="sm">
-                      <Link href="/admin/settings/restaurant-profile">
-                        <Building className="mr-1.5 h-4 w-4" /> Restaurant Profile
-                      </Link>
-                    </Button>
-                    <Button asChild variant="ghost" size="sm">
-                        <Link href="/admin/users">
-                          <UserCog className="mr-1.5 h-4 w-4" /> User Mgt.
-                        </Link>
-                    </Button>
-                  </>
-                 )}
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/admin/settings/restaurant-profile">
+                    <Building className="mr-1.5 h-4 w-4" /> Restaurant Profile
+                  </Link>
+                </Button>
+                {/* Removed User Management Link */}
                 
                 {/* Sync Button */}
-                {currentUser && (
-                  <Button variant="outline" size="sm" onClick={handleSyncData} title="Sync Data" disabled={isAuthLoading}>
-                    <RefreshCw className="mr-1.5 h-4 w-4" /> Sync
-                  </Button>
-                )}
+                <Button variant="outline" size="sm" onClick={handleSyncData} title="Sync Data">
+                  <RefreshCw className="mr-1.5 h-4 w-4" /> Sync
+                </Button>
 
-                {/* Auth Buttons */}
-                {!isAuthLoading && currentUser ? (
-                  <Button variant="outline" size="sm" onClick={handleLogout} title="Logout">
-                    <LogOut className="mr-1.5 h-4 w-4" /> Logout ({currentUser.displayName || currentUser.email})
-                  </Button>
-                ) : !isAuthLoading && !currentUser ? (
-                  <Button asChild variant="ghost" size="sm" onClick={() => router.push('/login')}>
-                     <Link href="/login">
-                        <LogIn className="mr-1.5 h-4 w-4" /> Login
-                     </Link>
-                  </Button>
-                ) : null}
+                {/* Removed Auth Buttons */}
 
               </div>
             </nav>
@@ -207,14 +170,5 @@ function AppContent({ children }: { children: React.ReactNode }) {
         </OrderProvider>
       </body>
     </html>
-  );
-}
-
-
-export default function RootLayout({ children }: { children: React.ReactNode; }) {
-  return (
-    <AuthProvider>
-      <AppContent>{children}</AppContent>
-    </AuthProvider>
   );
 }
