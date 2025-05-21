@@ -1,0 +1,9 @@
+
+import type { ReactNode } from 'react';
+
+export default function LoyalCustomersPageLayout({ children }: { children: ReactNode }) {
+  // This layout simply passes its children through.
+  // It's here to resolve an error if a faulty layout file existed at this path.
+  // It will inherit from /admin/layout.tsx and the root layout.
+  return <>{children}</>;
+}
