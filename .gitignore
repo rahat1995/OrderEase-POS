@@ -1,45 +1,71 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# dependencies
+# Dependencies
 /node_modules
 /.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+.pnp.js
+.yarn/install-state.gz
 
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# vercel
-.vercel
-
-# typescript
+# TypeScript
 *.tsbuildinfo
 next-env.d.ts
 
-.genkit/*
-.env*
+# Next.js
+/.next/
+/out/
 
-# firebase
-firebase-debug.log
-firestore-debug.log
+# Production
+/build
+
+# Misc
+.DS_Store
+*.pem
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Local NVM version
+.nvmrc
+
+# Local Ruby version
+.ruby-version
+
+# Local Node.js version
+.node-version
+.tool-versions
+
+# Editor directories and files
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.sublime-workspace
+
+# Environment variables
+.env
+.env*.local
+.env.*.local
+!.env.example
+!.env.example.local
+
+# Next.js build outputs
+.next
+out
+
+# Turborepo
+.turbo
+
+# IDE
+.idea
+*.iml
+
+# Temp
+temp/
+tmp/
